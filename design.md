@@ -1,163 +1,276 @@
 # AG Golf League Management Software — Design Document
 
 ## 1. Overview
-This golf league management software will manage a public 9 hole golf league. 
+This golf league management software will manage a public 9-hole golf league. The league plays at an 18-hole course; each round, a group plays either the front nine (holes 1–9) or the back nine (holes 10–18), alternating week to week.
 
-## 2. English description of what I want to be able to do and store and provide
- - As admin, I want to be able to create/update/remove a golf course. Name, address, phone, slope etc.
-    - As admin, I want to be able to store golf course pictures, including a score card picture
-    - As admin, under the golf course I want to be able to create/update holes 1 to 18 with yardages for each tee, handicap, etc.
- - As admin, I want to be able to create/update/remove golf games. For each game there will be a name, type, use for handicap flag, scoring rules
- - As admin, I want to be able to create a league, storing the name, start and end dates, and assign golf courses the members will play at
-    - For now a league will play at only one course
-    - Existing members can be converted to the new league by re-registering
- - As admin, once the league is created, I want to be able to create/update a list of tee times for the front and back nine holes
- - As admin, I need the ability to easily adjust tee times by maybe applying an offset to each one accounting for daylight availablity
- - As admin, once the league is created, I want to be able create rounds. There will be a round for each day the league is played.  Rounds will define the game to be played, and entry fee per player
- - As admin, I want to be able to create/update/remove notifications which are shown on the league main webpage and are emailed to all members
- - As admin, I want to be able to create/update/remove members (players), I can ceate multiple admins as well.  Admins are just players with extra abilities to manage the league, members are assigned a flight, (1, 2, or 3), based on their handicap. Low handicap players (5 and lower) are flight 1. Mid handicap players 5.1 to 10 are flight 2. All players with handicap above 10 are flight 3. Flights will always try to be adjusted so there are at least 15 players in a flight.
- - As a user, I want to be able to register for the league which either creates a member record or updates an existing member record
- - As admin, I want to be able to created/update/remove groups. Groups will line up with tee times and will define what members play together and what times they play, groups do not always define teams
- - As admin, for each round I need to be able to change the groups to play the opposite nine holes.  Groups will play front nine one week, back nine the next
- - As admin, for team games, I need to be able to adjust members of a team after the round is complete and before scoring computation begins.
- - As admin, I need to be able to close a round which disables online scoring
-    - I need to be able to view/edit scores
-    - I need to be able to finalize the round
-        - Calculate scores based on game scoring rules
-        - Applies any handicaps as defined by game scoring rules
-        - Figure out placement.  IE 1, 2, 3 etc.
-        - Figure out any skins if skins are active
-    - Scoring records are updated with placement and winnings
- - As admin, I need to be able to start a round so it is active. Starting a round will create scoring records for all of the members.  Scores are set to 0.
- - As a user, I want to be able to go to the league home web page and see information about the league including, notifications and a list of rounds and the status of each round
- - As a user, I want to be able to go to a detail web page for a round and view detail information on the round, scoring if it has been played, placements and winnings
- - As a user, for the active round, I want to be able to enter my score online, scoring is always a score for every hole played, hole-by-hole scoring.
- - As a user, I want to be able to submit a score card picture if I do not use online scoring
- - As a user, I want to be able to submit my round scores via email
- - As a user, I want to be able to go to my own member web page where I can view a list of the rounds I played in and my placement, winnings for the round, as well as my total winnings
- - As a user, I want to be able to send other users messages and I want to be able to read messages sent to me
- - As a guest, a non member, I want to be able to view a main league web page
+### 1.1 Scope and phases
+- **Phase 1 (MVP):** courses/tees/holes, games, leagues, registration, members and flights, tee times, groups, rounds (start/close/finalize), online hole-by-hole scoring, admin score entry/edit, payouts and skins, handicap calculation, league home page, round detail page, member page, notifications (web + email), password login/reset.
+- **Phase 2:** scorecard picture upload by players, member-to-member messaging, season standings/reports.
+- **Phase 3 / maybe:** score submission by email (requires inbound email parsing), tee time import from the course.
+- **Out of scope:** online payment collection, official GHIN handicap posting, multiple courses per league.
 
-### 2.1 Game defintions
- - All players pay in $10 into the pot to play into any game/round
- - Some game types specify that a percentage will be applied to a players handicap.  The game will specify the percentage value.
- - Some team game types specify that the handicaps will be averaged and a percentable of that resulting average will be appled as the handicap for the team.  The game will specify the percentage
- - For all individual stroke scoring, winnings are divided by flights.  
-    - Table in software will define the percentage of the pot that each flight gets to payout from. This will also be based on number of players in each flight.
-    - Payouts are made based on places 1 to 15 based on the following percentages, The above flight percents and this table percents below will be editable in the software by admin.
-    1	11%
-    2	10.5%
-    3	10.0%
-    4	9.5%
-    5	9.0%
-    6	8.5%
-    7	8.0%
-    8	7.5%
-    9	7.0%
-    10	6.5%
-    11	6.0%
-    12	3.0%
-    13	2.0%
-    14	1.0%
-    15	0.5%
-- For individual stroke play with skins the pot is again divided by flights as above, however $5 per hole for skins ($45 total) is pulled from the flight pot to be paid out in skins winnings
-    Payout is like stroke pay above with the possible addition of skins payout if the player wins holes.
-    The software computes in the flight who wins, loses or ties a hole based on gross score for the hole and applies the skin amount appropriately
-    If the hole is tied, the skin carries over to the next hole adding the skin amount to be won to the next hole. The skin amount can carry over multiple holes so it is possible it could be carried over through the full nine holes making the 9th hole skin worth $45.
-    If at the end of nine holes the skin has not been won it returns to the pot.
-- For team play like scrambles there are no flights. Payout uses the entire pot and pays out to teams based on a percentage table like the 1-15 table above. Winnings are divided amongst the team.
- - Games to be supported:
-    - Stroke play
-        - Description: Standard stroke play
-        - Scoring: Individual scoring shots per hole
-        - Handicap: Player handicap is applied at completion
-        - Score will be used to compute player handicap
-        - Results: Winning position is calculated based on net score. Number of winners will depend upon number of players playing, but typically will be 15.
-        - Payout is handled as described above, by flight, by score position within the flight
-    - Stroke play with Skins
-        - Description: Standard stroke play, skins play on each hole
-        - Scoring: Individual scoring shots per hole
-        - Handicap: Player handicap is applied at completion
-        - Score will be used to compute player handicap
-        - Payout will be handled like stroke play with the addition of possible skins winning payout
-    - Scramble
-         - Description: Team based, each player hits, players move to best ball, all hit again, continue until holed out.
-         - Team formation: By definition the team is the members of the group you teed off with.  Score page will have a group selection to indicate the group. All players select the same group.
-         - Scoring: Each player enters the same shot count per hole for their score
-         - Handicap: Team members handicaps are averaged and a percentage of that final average is applied to the team score at completion
-         - Score will not be used to compute players handicaps
-         - Payout is handled like stroke play except the the strokes are based on the team score minus the team handicap
-    - Modified best ball
-         - Description: Standard stroke play except that each player, once per hole, gets to move their ball to the best ball, remainder is played individually until holed out
-         - Scoring: Individual scoring shots per hole
-         - Handicap: A percentage of players handicap is applied at completion
-         - Score will not be used to complete player handicap
-         - Payout will be handled like stroke play
-    - Red, white, blue
-         - Descripion: Players choose to hit from red, white or blue tees on holes of their choice.  Must hit from 3 reds, 3 whites, and 3 blues
-         - Scoring: Individual scoring shots per hole
-         - Handicap: A percentage of player handicap is applied at completion
-         - Score will not be used to compute players handicap
-         - Payout will be handled like stroke pay
-    - Modified red, white, blue
-         - Description: Players start on their normal tee color.  A bogey, player moves forward a tee, a par player remains on current color tee, a birdie player moves back a tee
-         - Scoring: Individual scoring shots per hole
-         - Handicap: A percentage of player handicap is applied at completion
-         - Score will not be used to compute players handicap
-         - Payout will be handled like stroke play
-    - Irons only
-         - Discrption: Entire round is played with irons only
-         - Scoring: Individual scoring shots per hole
-         - Handicap: Player handicap is applied at completion
-         - Score will not be used to compute players handicap
-         - Payout will be handled like stroke play
-    - 3 clubs only
-         - Description: Player must choose three clubs and use only those three clubs for the entire round
-         - Scoring: Individual scoring shots per hole
-         - Handicap: Player handicap is applied at commpletion
-         - Score will not be used to compute players handicap
-         - Payout will be handled like stroke play
-    - Tick, tack, toe
-         - Description: Standard stroke play except players keep trak of: First on green (tick), Closet to the pin (tack), First in the hole (toe)
-         - Scoring: Invidual scoring shots per hole, players indicate if they got a tick, tack, or toe on scoring page or score card
-         - Handicap: Player handicap is applied at completion
-         - Score will be used to compute player handicap
-         - Payout will be handled like stroke play 
- - Games will define the placement winning percentages of money based on scoring and game scoring rules
- - Because scoring rules are complex, a game will basically cause code during round finalization to invoke a scoring function that will process each score, apply handicaps and calculate placement
+Items marked **D#** refer to the Open Decisions log in section 11. Where a proposed default is given, it is used until the decision is confirmed.
 
-## 3. Technology & Hosting
-- **Language/Framework:** PHP / CodeIgniter
-- **Database:** SQLite (confirm or revise)
-- **Hosting Environment:** Self-hosted on home Linux PC
-- **Constraints:** _Hardware specs, network setup (port forwarding, dynamic DNS, reverse proxy?), domain/SSL plans, backup strategy_
+## 2. What I want to be able to do, store and provide
 
-## 4. Information/model hierarchy
-- Data models will be defined based on the above list of needs
+### 2.1 Courses
+- As admin, I want to be able to create/update/remove a golf course: name, address, phone, website, notes.
+  - As admin, I want to be able to store golf course pictures, including a scorecard picture.
+  - As admin, under the golf course I want to be able to create/update tees (color/name, plus Course Rating and Slope Rating for the front nine and for the back nine). Ratings are required for handicap calculation.
+  - As admin, under the golf course I want to be able to create/update holes 1 to 18 with par, hole handicap (stroke index), and yardage for each tee.
 
-## 5. Handicap Calculation
-- _Requirements:_
-- Use World Handicap System (WHS) method for calculating 9 hole handicap for each player
-- Follow WHS guide likes for double bogey limits and any other guidelines
-- Admin can enter/override a users handicap
-- Admin triggers any handicap updates when closing a round
-- _Open questions:_
-    Should there be different handicaps maintained for front nine versus back nine?
+### 2.2 Games
+- As admin, I want to be able to create/update/remove golf games. Each game has a name, description, game type (which selects the scoring function), team/individual flag, "counts toward handicap" flag, handicap percentage, whether flights are used, whether skins are active, and the payout table used.
 
-## 6 Performance / Hardware Constraints
-- _Expected concurrent users: 100 concurrent users maximum
+### 2.3 Leagues, members and registration
+- As admin, I want to be able to create a league, storing the name, start and end dates, default entry fee, and the golf course the members will play at.
+  - For now a league plays at only one course.
+  - A member record is global and carries over between leagues (seasons). Existing members join a new league by re-registering, which creates a new league membership for them.
+- As a user, I want to be able to register for the league, which either creates a member record or updates an existing member record and creates the league membership. (Approval / email verification: **D1**.)
+- As admin, I want to be able to create/update/remove members (players). I can create multiple admins as well. Admins are players with extra abilities to manage the league.
+- Members are assigned a flight (1, 2, or 3) based on their handicap:
+  - Flight 1: handicap 5.0 and lower
+  - Flight 2: handicap 5.1 to 10.0
+  - Flight 3: handicap above 10.0
+  - Flights will be adjusted so there are at least 15 players in a flight where possible. The exact balancing rule and when flights are recalculated are **D2**.
 
-## 7 Security & Access Control
-- _Authentication method, session handling, admin vs. player access control_
-- Simple username/password login for both users and admin, require minimum 8 character passwords
-- Users can reset passwords using common link that sends email to confirm and allow password change
-- Admin can reset and enter new password for users
-- SSL must be in place so browsers do not complain about insecure website
+### 2.4 Tee times and groups
+- As admin, once the league is created, I want to be able to create/update a list of tee times for the front nine and a list for the back nine.
+- As admin, I need the ability to easily adjust tee times, for example by applying an offset to all of them to account for daylight availability.
+- As admin, I want to be able to create/update/remove groups. Groups line up with tee times and define which members play together and when. Groups do not always define teams.
+- As admin, for each round I need to be able to switch groups to the opposite nine. Groups play the front nine one week and the back nine the next.
+- How players get into a round and into groups (sign-up, group size, manual vs. automatic assignment) is **D3**.
 
-## 8 Data Backup & Retention
-- _Backup frequency/method, how long is historical data kept_
-- Backup frequency will be daily - Backup will be made to a remote drive or cloud drive
-- Historical data is kept until Admin purges it
+### 2.5 Rounds
+- As admin, once the league is created, I want to be able to create rounds. There is one round for each day the league plays. A round defines the date, the game to be played, and the entry fee per player (defaults to the league entry fee, $10).
+- As admin, I need to be able to start a round so it is active. Starting a round creates a score record for every player in the round with all hole scores empty (not yet entered). Empty is stored as NULL, never 0.
+- As admin, I need to be able to close a round, which disables online scoring.
+  - I need to be able to view/edit scores.
+  - For team games, I need to be able to adjust team members after the round is complete and before scoring computation begins.
+- As admin, I need to be able to finalize a closed round, which:
+  - Calculates scores based on the game's scoring rules
+  - Applies handicaps as defined by the game's scoring rules
+  - Determines placement (1, 2, 3, etc.) using the tie rules in section 2.8
+  - Determines skins, if skins are active
+  - Updates score records with placement and winnings
+  - Updates player handicaps, if the game counts toward handicap
+- See section 5 for the full round lifecycle.
 
-## 9. Open Questions / Decisions Log
-- How do I coordinate and get tee times from the golf course?
+### 2.6 Notifications and messages
+- As admin, I want to be able to create/update/remove notifications, which are shown on the league main web page and emailed to all members.
+- As a user, I want to be able to send other users messages and read messages sent to me. (Phase 2)
+
+### 2.7 Player and guest pages
+- As a guest (non-member), I want to be able to view the league main web page. Guests never see member email addresses or phone numbers.
+- As a user, I want to be able to go to the league home web page and see information about the league, including notifications and a list of rounds with the status of each.
+- As a user, I want to be able to go to a detail web page for a round and view its details, scoring if it has been played, placements and winnings.
+- As a user, for the active round, I want to be able to enter my score online. Scoring is always hole by hole, for every hole played. The score entry page must work well on a phone. (Who may enter or edit whose score: **D4**.)
+- As a user, I want to be able to submit a scorecard picture if I do not use online scoring. An admin then enters the scores. (Phase 2)
+- As a user, I want to be able to submit my round scores via email. (Phase 3; format and parsing: **D5**.)
+- As a user, I want to be able to go to my own member web page, where I can view the rounds I played in, my placement and winnings for each, and my total winnings.
+
+### 2.8 Payouts, ties and money
+- Each player pays the round entry fee (default $10) into the pot. Whether payment is tracked in the software is **D6**.
+- All money is stored as integer cents. Rounding rules and where leftover cents go are **D7**.
+- **Flight games (individual stroke scoring):** the pot is divided among flights. The share for each flight comes from an admin-editable flight table and depends on the number of players in each flight. Proposed default: each flight's share is proportional to its player count (**D8**).
+- Within each flight, places 1 to 15 are paid from the flight pot using the admin-editable placement table below (the percentages add up to 100%):
+
+  | Place | % | Place | % | Place | % |
+  |---|---|---|---|---|---|
+  | 1 | 11.0 | 6 | 8.5 | 11 | 6.0 |
+  | 2 | 10.5 | 7 | 8.0 | 12 | 3.0 |
+  | 3 | 10.0 | 8 | 7.5 | 13 | 2.0 |
+  | 4 | 9.5 | 9 | 7.0 | 14 | 1.0 |
+  | 5 | 9.0 | 10 | 6.5 | 15 | 0.5 |
+
+- What happens when a flight has fewer than 15 players (rescale vs. return unpaid percentages to the pot) is **D9**.
+- Ties in placement: proposed default is that tied players split the combined percentages of the places they occupy (**D10**).
+- **Skins** (when active): $5 per hole ($45 for nine holes) is taken out of each flight pot before placement payouts and paid as skins.
+  - Within the flight, a skin is won by the single lowest gross score on a hole.
+  - If the hole is tied, the skin carries over and is added to the next hole. It can carry over multiple holes, so the 9th hole skin could be worth $45.
+  - A skin not won by the end of nine holes returns to the flight pot and is paid out by placement.
+  - Whether the $45 is fixed regardless of flight size is **D11**.
+- **Team games (e.g. scramble):** there are no flights. The whole pot is paid to teams by placement using an admin-editable team payout table. Each team's winnings are divided evenly among its members.
+
+## 3. Game definitions
+- Some game types apply a percentage of the player's handicap. The game specifies the percentage.
+- Some team game types average the team members' handicaps and apply a percentage of that average as the team handicap. The game specifies the percentage.
+- Each game references a payout table, so games define how winnings are split by placement.
+- Because scoring rules are complex, each game type maps to a scoring function in code. Finalizing a round calls that function to process each score, apply handicaps and calculate placement.
+- Net score = total gross score for the nine minus the applied handicap, unless the game says otherwise. Whether handicap strokes are applied to the total or allocated hole by hole is **D12**.
+
+Games to be supported:
+
+| Game | Scoring | Handicap applied | Counts toward handicap | Payout |
+|---|---|---|---|---|
+| Stroke play | Individual, per hole | 100% of player handicap | Yes | By flight, by place |
+| Stroke play with skins | Individual, per hole | 100% of player handicap | Yes | By flight, by place, plus skins |
+| Scramble | One team score per hole | % of averaged team handicap | No | Team payout table, no flights |
+| Modified best ball | Individual, per hole | % of player handicap | No | By flight, by place |
+| Red, white, blue | Individual, per hole; tee recorded per hole | % of player handicap | No | By flight, by place |
+| Modified red, white, blue | Individual, per hole; tee recorded per hole | % of player handicap | No | By flight, by place |
+| Irons only | Individual, per hole | 100% of player handicap | No | By flight, by place |
+| 3 clubs only | Individual, per hole | 100% of player handicap | No | By flight, by place |
+| Tick, tack, toe | Individual, per hole, plus tick/tack/toe flags | 100% of player handicap | Yes | By flight, by place (tick/tack/toe value: **D13**) |
+
+- **Stroke play:** standard stroke play. Placement is by net score. The number of paid places depends on the number of players, typically 15.
+- **Stroke play with skins:** standard stroke play, with skins played on each hole (see section 2.8).
+- **Scramble:** team based. Each player hits, all players move to the best ball and hit again, continuing until holed out.
+  - Team formation: by default, the team is the group you teed off with. Admin can adjust teams after the round (section 2.5).
+  - Scoring: one score per hole is stored for the team. Any team member may enter it; all members see the same score.
+  - Team size rules: **D14**.
+- **Modified best ball:** standard stroke play, except each player may move their ball to the best ball once per hole. The rest of the hole is played individually until holed out.
+- **Red, white, blue:** players choose to hit from the red, white or blue tees on holes of their choice, and must play exactly 3 holes from each. The score page records the tee played on each hole and enforces 3/3/3.
+- **Modified red, white, blue:** players start on their normal tee color. After a bogey (or worse — **D15**), the player moves forward one tee; after a par they stay on the same tee; after a birdie or better they move back one tee. If already on the front or back tee, they stay there. The tee played is recorded per hole.
+- **Irons only:** the entire round is played with irons only.
+- **3 clubs only:** each player chooses three clubs and uses only those clubs for the entire round.
+- **Tick, tack, toe:** standard stroke play, but players also record, per hole: first on the green (tick), closest to the pin (tack), and first in the hole (toe), on the scoring page or scorecard.
+
+## 4. Technology & Hosting
+- **Language/Framework:** PHP 8.2+ / CodeIgniter 4.x
+- **Database:** SQLite in WAL mode. This is sufficient for the expected load (section 7). Revisit only if write contention appears.
+- **Front end:** server-rendered pages, mobile-first layout (score entry happens on the course on phones).
+- **Hosting Environment:** self-hosted on a home Linux PC.
+- **Network and SSL (D16):** proposed: Cloudflare Tunnel (no port forwarding or dynamic DNS needed, SSL handled). Alternative: dynamic DNS + port forwarding + reverse proxy (Caddy or nginx) + Let's Encrypt.
+- **Email (D17):** outgoing email must go through a transactional email service (e.g. Postmark, Mailgun, Amazon SES, SMTP2GO). Residential ISPs commonly block port 25, and mail sent directly from a home IP is usually marked as spam.
+- **File storage:** uploaded pictures are stored on disk outside the web root, with file-type checks and a size limit (proposed 10 MB).
+- **Constraints:** _hardware specs, domain name_
+
+## 5. Round Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Scheduled: admin creates round
+    Scheduled --> Active: admin starts round
+    Active --> Closed: admin closes round
+    Closed --> Finalized: admin finalizes round
+    Finalized --> Closed: admin reopens (D18)
+    Scheduled --> Cancelled: admin cancels
+    Active --> Cancelled: admin cancels (rainout)
+```
+
+| State | Meaning | Who can change scores | Shown to players as |
+|---|---|---|---|
+| Scheduled | Round created; game, date and entry fee set; groups/tee times being arranged | Nobody (no score records yet) | Upcoming |
+| Active | Round is being played | Players (per D4) and admins | In progress |
+| Closed | Online scoring disabled; admin reviews scores and adjusts teams | Admins only | Scoring in review |
+| Finalized | Results computed; placements, winnings and handicaps recorded | Nobody (reopen first) | Final |
+| Cancelled | Round not played or abandoned (e.g. rainout) | Nobody | Cancelled |
+
+| Transition | Preconditions | Side effects |
+|---|---|---|
+| Scheduled → Active | Game, entry fee and groups are set | Create one score record per player (or per team) with NULL hole scores; set front/back nine per group |
+| Active → Closed | — | Disable online score entry |
+| Closed → Finalized | Every score record is complete, or admin marks missing players as no-show (D19) | Run the game's scoring function; compute placement, ties, skins, payouts; update handicaps if the game counts toward handicap; record who finalized and when |
+| Finalized → Closed | Admin confirms | Delete computed payouts/placements; reverse handicap updates from this round (D18) |
+| → Cancelled | Admin confirms | No payouts; entry fee handling per D20 |
+
+## 6. Data Model (proposed)
+All tables also have `id`, `created_at` and `updated_at`. Money is stored in integer cents. Handicaps are stored to one decimal place.
+
+### Courses
+- **course** — name, address, phone, website, notes
+- **course_photo** — course_id, file_path, caption, is_scorecard
+- **tee** — course_id, name/color, sort_order (front to back), front9_course_rating, front9_slope, back9_course_rating, back9_slope
+- **hole** — course_id, number (1–18), par, handicap_index (stroke index)
+- **hole_yardage** — hole_id, tee_id, yards
+
+### Members and leagues
+- **member** — first_name, last_name, email (unique, used for login), phone, password_hash, is_admin, default_tee_id, handicap_index, handicap_override (nullable), status (active/inactive)
+- **league** — name, course_id, start_date, end_date, default_entry_fee_cents
+- **league_membership** — league_id, member_id, flight (1/2/3), registered_at; unique (league_id, member_id)
+- **password_reset** — member_id, token_hash, expires_at, used_at
+
+### Games and payouts
+- **game** — name, description, game_type (selects the scoring function), is_team_game, uses_flights, skins_enabled, skin_amount_cents, handicap_percent, counts_toward_handicap, payout_table_id
+- **payout_table** — name (e.g. "Individual by place", "Team")
+- **payout_table_row** — payout_table_id, place, percent
+- **flight_payout_config** — league_id, flight, percent (or rule per D8)
+
+### Tee times, rounds, groups and teams
+- **tee_time** — league_id, nine (front/back), base_time, sort_order
+- **round** — league_id, game_id, play_date, entry_fee_cents, tee_time_offset_minutes, status (scheduled/active/closed/finalized/cancelled), finalized_at, finalized_by
+- **round_group** — round_id, tee_time_id, nine (front/back), group_number
+- **round_group_member** — round_group_id, member_id
+- **team** — round_id, name, handicap_applied
+- **team_member** — team_id, member_id
+
+### Scoring and results
+- **score** — round_id, member_id (nullable for team score), team_id (nullable), flight (copied at start of round), handicap_index_used, course_handicap, handicap_applied, gross_total, net_total, place, winnings_cents, status (in_progress/complete/no_show)
+- **hole_score** — score_id, hole_id, strokes (NULL until entered), tee_id (for red/white/blue games), tick, tack, toe (flags), entered_by, entered_at
+- **scorecard_image** — score_id, file_path, uploaded_by, uploaded_at
+- **skin_result** — round_id, flight, hole_id, winner_member_id (nullable), amount_cents, carried_over
+- **handicap_history** — member_id, round_id (nullable), score_differential, handicap_index_before, handicap_index_after, source (calculated/admin override), changed_by
+
+### Communication and audit
+- **notification** — league_id, title, body, published_at, emailed_at, created_by
+- **message** — from_member_id, to_member_id, subject, body, sent_at, read_at
+- **audit_log** — member_id (who), action, entity_type, entity_id, before_json, after_json, created_at. Every admin change to scores, teams, handicaps and round status is logged.
+
+## 7. Handicap Calculation
+- Use the World Handicap System (WHS) method for 9-hole scores. 9-hole scores are converted to an 18-hole score differential using the WHS expected-score method.
+- Course handicap for a nine: `Handicap Index ÷ 2 × (Slope ÷ 113) + (Course Rating − Par)`, using the rating, slope and par for the nine and tee played.
+- One handicap index per player. Front-nine and back-nine differences are handled automatically by the separate ratings for each nine, so no separate front/back handicaps are kept.
+- Apply WHS adjustments, including net double bogey as the maximum hole score for handicap purposes.
+- Handicaps are updated automatically when a round is finalized, using only games marked "counts toward handicap".
+- Admin can enter or override a player's handicap. Overrides are recorded in handicap history.
+- This is a league-only handicap, not an official GHIN handicap.
+- **Still to decide:** starting handicap for new players (D21); number of scores required before a handicap is established, and how many recent scores are used (D22); rounding rules (D23).
+
+## 8. Performance / Hardware Constraints
+- Expected concurrent users: 100 maximum.
+- Peak load is during and right after a round, when players are entering scores on their phones.
+
+## 9. Security & Access Control
+- Simple email/password login for both players and admins. Passwords must be at least 8 characters and are stored using PHP `password_hash()`.
+- Roles: guest, member, admin. Admin pages and actions check the admin role on every request.
+- Users can reset their own password through an emailed, single-use link that expires (proposed: 1 hour).
+- Admin can reset and set a new password for a user.
+- CSRF protection on all forms (CodeIgniter built-in). Rate limiting on login and password reset.
+- SSL must be in place so browsers do not show an insecure-website warning.
+- Uploads are validated by file type and size, and served through the application, not directly from the upload folder.
+- Guests never see member contact information.
+
+## 10. Data Backup & Retention
+- Backups run daily to a remote drive or cloud drive.
+- Back up both the SQLite database (using SQLite's online backup, not a plain file copy while in use) and the uploaded pictures folder.
+- Test a restore at least once before the season starts.
+- Historical data is kept until an admin purges it.
+
+## 11. Open Decisions Log
+| # | Question | Proposed default | Status |
+|---|---|---|---|
+| D1 | Is registration open, or does an admin approve it? Is email verification required? | Open registration with email verification; admin can deactivate | Open |
+| D2 | Flight balancing rule and when flights are recalculated | Sort by handicap; use the cutoffs, then move boundary players so each flight has ≥15 when there are ≥45 players; recalculate before each round starts, then freeze for that round | Open |
+| D3 | How players sign up for a round; group size; manual vs. automatic group assignment | Players mark "playing" for each round before it starts; groups of 4; admin assigns, with an auto-fill option | Open |
+| D4 | Who can enter/edit a score during an active round? | Player enters their own; anyone in the same group can enter for the group; admins can edit any | Open |
+| D5 | Email score submission format | Phase 3; defer | Open |
+| D6 | Is entry fee payment tracked in the software? | Admin checkbox "paid" per player per round | Open |
+| D7 | Money rounding | Round payouts down to whole dollars; leftover goes to the 1st place payout in that flight | Open |
+| D8 | Formula for dividing the pot among flights | Proportional to number of players in each flight | Open |
+| D9 | Flight with fewer than 15 players | Pay only the places that exist and rescale the percentages to 100% | Open |
+| D10 | Tie handling for placement | Tied players split the combined percentages of the places they occupy | Open |
+| D11 | Is the $45 skins amount fixed regardless of flight size? | Fixed $5 per hole, admin-editable on the game | Open |
+| D12 | Handicap applied to the total vs. allocated hole by hole | Applied to the total for placement; hole allocation used only for net double bogey | Open |
+| D13 | What a tick, tack or toe is worth and how it affects payout | — | Open |
+| D14 | Scramble team size and handling of uneven teams | Teams of 2–4; team handicap percentage set on the game | Open |
+| D15 | Modified RWB: does "bogey" mean bogey or worse? | Bogey or worse | Open |
+| D16 | Network/SSL approach | Cloudflare Tunnel | Open |
+| D17 | Transactional email provider | — | Open |
+| D18 | Can a finalized round be reopened? | Yes, admin only; reverses payouts and handicap updates from that round | Open |
+| D19 | Missing scores at finalization | Admin marks the player as no-show; no-shows are excluded from placement and the pot | Open |
+| D20 | Entry fees for a cancelled round | Not collected / refunded | Open |
+| D21 | Starting handicap for a new player | Admin enters it at registration | Open |
+| D22 | Scores required to establish a handicap, and how many recent scores are used | Per WHS: best 8 of the last 20 18-hole differentials | Open |
+| D23 | Handicap rounding | Per WHS | Open |
+| D24 | How do we coordinate with and get tee times from the golf course? | Admin enters them manually | Open |
+
+## 12. Glossary
+- **League:** one season of play at one course.
+- **Round:** one day of league play, with one game.
+- **Group:** players who tee off together at one tee time.
+- **Team:** players whose scores are combined for a team game. Often the same as a group, but not always.
+- **Flight:** a handicap band (1, 2 or 3) used to divide the pot in individual games.
+- **Pot:** total entry fees collected for a round.
+- **Skin:** money won by having the single lowest gross score on a hole within a flight.
+- **Handicap index:** a player's portable handicap. **Course handicap:** the strokes a player gets for a specific nine and tee.
