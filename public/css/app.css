@@ -1,0 +1,152 @@
+/* Golf League — mobile-first styles */
+
+:root {
+    --bg: #f6f7f4;
+    --surface: #ffffff;
+    --text: #1d2420;
+    --muted: #5d6a62;
+    --border: #d6dcd6;
+    --accent: #1f6b3a;
+    --accent-text: #ffffff;
+    --danger: #a32b2b;
+    --ok-bg: #e5f3ea;
+    --error-bg: #fbe7e7;
+    --radius: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #141816;
+        --surface: #1d2320;
+        --text: #e6ebe7;
+        --muted: #9aa69f;
+        --border: #34403a;
+        --accent: #4caf73;
+        --accent-text: #0d1a12;
+        --danger: #e07070;
+        --ok-bg: #1e3527;
+        --error-bg: #3d2222;
+    }
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    background: var(--bg);
+    color: var(--text);
+}
+
+a { color: var(--accent); }
+
+h1 { font-size: 1.5rem; margin: 0 0 1rem; }
+h2 { font-size: 1.15rem; margin: 1.5rem 0 0.5rem; }
+
+.muted, .help { color: var(--muted); }
+
+/* Header */
+.site-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    padding: 0.75rem 1rem;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+}
+.brand { font-weight: 700; color: var(--text); text-decoration: none; }
+.nav { display: flex; flex-wrap: wrap; gap: 0.25rem 0.9rem; order: 3; width: 100%; }
+.nav a { text-decoration: none; }
+.who { margin-left: auto; color: var(--muted); font-size: 0.9rem; }
+
+@media (min-width: 900px) {
+    .nav { order: 0; width: auto; }
+}
+
+/* Page */
+.page { max-width: 1100px; margin: 0 auto; padding: 1rem; }
+.page-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 1rem; }
+.page-head h1 { margin: 0; }
+
+.flash { padding: 0.6rem 0.8rem; border-radius: var(--radius); margin: 0 0 1rem; }
+.flash p { margin: 0.2rem 0; }
+.flash-ok { background: var(--ok-bg); }
+.flash-error { background: var(--error-bg); }
+
+/* Buttons */
+button, .button {
+    display: inline-block;
+    padding: 0.55rem 1rem;
+    border: 0;
+    border-radius: var(--radius);
+    background: var(--accent);
+    color: var(--accent-text);
+    font: inherit;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+}
+.button-secondary { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+.button-danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+
+/* Forms */
+.form { max-width: 640px; }
+.form.narrow { max-width: 360px; }
+.field { margin-bottom: 0.9rem; }
+.field label, .form > label { display: block; font-weight: 600; margin-bottom: 0.25rem; }
+.field small { display: block; margin-top: 0.2rem; font-size: 0.85rem; }
+.field .error { color: var(--danger); }
+.field-check { display: flex; align-items: center; gap: 0.5rem; }
+.field-check label { order: 2; margin: 0; font-weight: 500; }
+.field-check small { order: 3; width: 100%; }
+
+input, select, textarea {
+    width: 100%;
+    padding: 0.5rem 0.6rem;
+    font: inherit;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+input[type="checkbox"] { width: 1.2rem; height: 1.2rem; }
+.form.narrow input { margin-bottom: 0.9rem; }
+.has-error input, .has-error select { border-color: var(--danger); }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 0 0.75rem; }
+
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin-top: 1rem; }
+.delete-form { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-bottom: 1rem; }
+.filters select { width: auto; }
+
+.form.inline { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; max-width: none; }
+.form.inline select, .form.inline input { width: auto; }
+
+.panel { margin-top: 2rem; padding: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.panel h2 { margin-top: 0; }
+
+/* Tables */
+.table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+th, td { padding: 0.5rem 0.6rem; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+thead th { font-size: 0.85rem; color: var(--muted); }
+tbody tr:last-child td { border-bottom: 0; }
+.row-actions { display: flex; gap: 0.75rem; }
+
+table.holes th, table.holes td { padding: 0.25rem; text-align: center; }
+table.holes .cell { width: 4.2rem; padding: 0.35rem; text-align: center; }
+table.holes .divider td { font-weight: 600; background: var(--bg); }
+table.holes tr.has-error th { color: var(--danger); }
+.tee-blue { color: #3b6fd8; }
+.tee-red { color: #d23d3d; }
+
+/* Dashboard */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.75rem; margin: 1rem 0; }
+.card { display: block; padding: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); text-decoration: none; color: var(--text); }
+.card-count { display: block; font-size: 1.6rem; font-weight: 700; color: var(--accent); }
+.card-label { color: var(--muted); }

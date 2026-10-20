@@ -180,7 +180,9 @@ class App extends BaseConfig
      *
      * @var array<string, string>
      */
-    public array $proxyIPs = [];
+    // cloudflared connects from localhost; take the visitor's real IP from
+    // Cloudflare's header (see design.md, Technology & Hosting).
+    public array $proxyIPs = ['127.0.0.1' => 'CF-Connecting-IP'];
 
     /**
      * --------------------------------------------------------------------------
