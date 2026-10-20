@@ -42,7 +42,7 @@
             <thead>
             <tr>
                 <?php foreach ($columns as $name): ?>
-                    <th><?= esc($fields[$name]['listLabel'] ?? $fields[$name]['label']) ?></th>
+                    <th<?= ($fields[$name]['type'] ?? '') === 'money' ? ' class="num"' : '' ?>><?= esc($fields[$name]['listLabel'] ?? $fields[$name]['label']) ?></th>
                 <?php endforeach ?>
                 <?php if ($editColumn): ?><th></th><?php endif ?>
             </tr>
@@ -54,7 +54,7 @@
                         <?php if ($name === $editLinkColumn): ?>
                             <td><a href="<?= site_url("{$baseRoute}/{$row['id']}/edit") ?>" title="Edit"><?= esc(field_display($fields[$name], $row[$name] ?? null)) ?: 'Edit' ?></a></td>
                         <?php else: ?>
-                            <td><?= field_cell($fields[$name], $row[$name] ?? null) ?></td>
+                            <td<?= ($fields[$name]['type'] ?? '') === 'money' ? ' class="num"' : '' ?>><?= field_cell($fields[$name], $row[$name] ?? null) ?></td>
                         <?php endif ?>
                     <?php endforeach ?>
                     <?php if ($editColumn): ?>

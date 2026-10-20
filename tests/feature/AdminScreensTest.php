@@ -340,8 +340,8 @@ final class AdminScreensTest extends CIUnitTestCase
         // The member number was left blank on the form, so a new one was assigned.
         $this->assertNotEmpty((new PlayerModel())->find($playerId)['member_number']);
 
-        // The list total is $12.50 entered + $5.00 from rounds.
-        $this->asAdmin()->get("admin/players?league_id={$leagueId}")->assertSee('$17.50');
+        // The list total is $12.50 entered + $5.00 from rounds, right-aligned.
+        $this->asAdmin()->get("admin/players?league_id={$leagueId}")->assertSee('<td class="num">$17.50</td>');
     }
 
     public function testScoresListShowsGroupWithoutLeague(): void
