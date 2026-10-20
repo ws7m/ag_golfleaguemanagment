@@ -4,22 +4,260 @@
 This golf league management software will manage a public 9-hole golf league. The league plays at an 18-hole course. Each group plays either the front nine (holes 1–9) or the back nine (holes 10–18), and alternates between them week to week.
 
 ### 1.1 Scope and phases
-- **Phase 1 (MVP):** courses/tees/holes, games, leagues, registration, members and flights, tee times, groups, rounds (start/close/finalize), special event rounds at other courses, game voting, online hole-by-hole scoring, admin score entry/edit, automatic payouts and skins for regular rounds, manual payout entry, score export, handicap calculation, league home page, round detail page, member page, notifications (web + email), sitewide shared member login with member ID, individual admin login/reset, full history retention.
-- **Phase 2:** scorecard picture upload by players, member-to-member messaging, season standings/reports.
-- **Phase 3:** score submission by email (requires reading a league mailbox).
-- **Out of scope:** online payment collection, official GHIN handicap posting, more than one course within a single round, importing tee times from the course (D24), automatic flight balancing (D2).
+- **Phase 1:** Build data models for leagues, courses, holes, players, groups, tee times, rounds, scores, games, settings
+     - A new league record is created each year the league is run
+     - Courses and holes remain and link to the current league record
+     - Players are linked to the current league record.  If new player is created, link is made to league, existing players from prior leagues are linked to the current league when they register
+     - Groups are linked to the current league.  A group references players, up to 6 of them that play as a group.  Groups are created and maintained by the admin
+     - Tee times are linked to the current league and to a course.  Tee times are created and updated by the admin
+     - Rounds are created for each day the players will play in the league.  Rounds are linked to the league and to the course and to a game.  Admin only can create and update rounds.
+     - Scores are linked to a round and to a player.  Players can create and enter scores, admin can also create, enter, and update scores.
+- **Phase 2:** Add a default admin player
+- **Phase 3:** Build a login screen, Build add/edit/delete entry screens for all of the data
+- **Phase 4:** Round operations and scoring
+     - Players indicate if they will play in upcoming rounds; admin marks who paid
+     - Activate a round, live score entry by players, close a round
+     - Score the round and calculate payouts (needs the game "Scoring info", still TBD)
+     - League status page, player status page, round results page
+     - Email to all players
+- **Phase 5:** Automatic handicap calculation. Until then the admin enters each player's handicap. Needs course rating and slope per tee per nine (see 2.2).
+- **Later phases:** text messages to players, online payment, game voting, messages between players and from guests to the admin.
 
-Items marked **D#** refer to the Decisions Log in section 11. Decided items are written into the text below with their D# for traceability. For any item still Open, the proposed default in the log is used until the decision is made.
+The detailed design kept below "Ignore all below here for the time being" (including the decisions log, D#) is for later phases and is not part of the current build.
 
-## 2. What I want to be able to do, store and provide
+## 2. What I want to be able to do and store
 
-### 2.1 Courses
-- As admin, I want to be able to create/update/remove a golf course: name, address, phone, website, notes.
-  - As admin, I want to be able to store golf course pictures, including a scorecard picture.
-  - As admin, under the golf course I want to be able to create/update tees (color/name, plus Course Rating and Slope Rating for the front nine and for the back nine). Ratings are required for handicap calculation.
-  - As admin, under the golf course I want to be able to create/update holes 1 to 18 with hole handicap (stroke index), and for each tee: yardage and par. Par is stored per tee so a tee can have a different par from the others; at the home course it will usually be the same for every tee. (Whether hole handicap also needs to be stored per tee: D44.)
+### 2.1 Leagues
+- As admin, I want to be able to create/update the league.  Each season a new league record will be created and data will be copied from the old league
+  - Id
+  - Name
+  - Description
+  - Image
+  - Starting date
+  - Ending date
+  - Website
+  - Email
+  - Active
 
-### 2.2 Games
+### 2.2 Courses
+- As admin, I want to be able to create/update/delete golf courses.
+  - Id
+  - Name
+  - Description
+  - Address
+  - City
+  - State
+  - Zip
+  - Phone
+  - Email
+  - Image
+  - Rating
+  - Front slope
+  - Back slope
+  - Active
+- Note for Phase 5 (automatic handicaps): each tee (blue, white, red) has its own course rating and slope for the front nine and for the back nine. These fields will be needed then; the single Rating and front/back slope above are enough until then.
+
+### 2.3 Holes
+- As admin, I want to be able to create/update/delete golf course holes
+  - Id
+  - Course Id
+  - Number (1-18)
+  - Front or Back
+  - Blue yardage
+  - Blue par
+  - Blue handicap
+  - White yardage
+  - White par
+  - White handicap
+  - Red yardage
+  - Red par
+  - Red handicap
+  - Image
+
+### 2.4 Players
+- As admin, I want to be able to create/update/delete players
+- As player, I want to be able to update my demographic information
+  - Id
+  - Member number - Unique, random, non-sequential 5-digit number the player enters to log in (see 2.10)
+  - League Id - Set to league when player pays and registers
+  - First name
+  - Last name
+  - Male or Female
+  - Email
+  - Phone
+  - TextMsgOk
+  - Tee - Red, White, Blue
+  - Handicap - Whole integer number, entered by admin
+  - Flight - 1, 2 or 3, set by admin
+  - Desired tee time - Hour and minute
+  - Desired group members - CSV names
+  - IsAdmin
+  - Admin password - Hashed; only for admins (see 2.10)
+  - Active
+
+### 2.5 Groups
+- As admin, I want to be able to create/update groups. A group is the standing group for the league; it does not change each round.
+  - Id
+  - League Id
+  - Group number
+  - Front Tee time Id
+  - Back Tee time Id
+  - Player1 Id - Normal member of the group
+  - Player2 Id - Normal member of the group
+  - Player3 Id - Normal member of the group
+  - Player4 Id - Normal member of the group
+  - Player5 Id - Normal member of the group
+  - Player6 Id - Normal member of the group
+  - Active
+- Who actually played in a group in a given round, and which nine they played, is recorded on each player's score record for that round (Group Id and Front or back, see 2.9). This keeps a full history without changing the group each week.
+
+### 2.6 Tee times
+- As admin, I want to be able to create/update/delete tee times
+  - Id
+  - League Id
+  - Course Id
+  - Front or back
+  - Time
+- Groups point to their front and back tee times (2.5); tee times do not point back to groups.
+- Admin can shift all tee times forward or backward by a number of minutes (e.g. for daylight changes during the season).
+
+### 2.7 Rounds
+- As admin, I want to be able to create/update/delete rounds for the league.  There will be round for each day played.
+  - Id
+  - League Id
+  - Course Id
+  - Game Id
+  - Date
+  - Name
+  - Description
+  - Image
+  - Status - Scheduled, Active (open for live scoring), Closed (no new scores), Scored (results and payouts done)
+  - Entry fee - Default $10
+  - Use for handicap
+  - Total pot - Total of the entry fees marked paid on this round's score records; set when the round is scored
+
+### 2.8 Games
+- As admin, I want to be able to create/update/delete golf games to play on rounds
+  - Id
+  - League Id
+  - Name
+  - Description
+  - Scoring info - TBD
+  - Active
+
+### 2.9 Scores
+- A score record is a player's entry for one round. It is created when the player says they will play (or when the admin adds them), before any golf is played.
+- As admin, I want to be able to create/update/delete scores
+- As a player, I want to be able to create and update a score for myself in the current round
+  - Id
+  - League Id
+  - Player Id
+  - Group Id - The group the player actually played in this round
+  - Round Id
+  - Front or back - The nine played this round
+  - Playing - Yes/No; the player has said they will play
+  - Paid - Yes/No; set by admin when the entry fee is paid
+  - Locked
+  - Hole1 to Hole18 - Strokes per hole; blank (NULL) until entered, never 0. Only the nine played is filled in.
+  - Gross - Total strokes
+  - Handicap used - The player's handicap applied in this round
+  - Net - Gross minus handicap used
+  - Place - Finishing place, set when the round is scored
+  - Winnings - Amount won, set when the round is scored
+  - Image - Score card picture
+
+### 2.10 Settings and login
+- One settings record for the site:
+  - Id
+  - Shared login ID
+  - Shared password - Hashed
+  - Admin contact name
+  - Admin contact email
+- **Player login:** all players log in with the one shared login ID and password, then enter their Member number to identify themselves. This keeps login simple: players have no individual passwords to forget. Anyone who has the shared password and knows another player's Member number can act as that player, which is why Member numbers are random rather than sequential.
+- **Admin login:** admins log in with their own email and Admin password.
+
+### 2.11 Deleting records
+- A record can be deleted only if nothing points to it. For example, a course with holes, tee times or rounds, a player with scores, a game used by a round, or a round with scores cannot be deleted.
+- Records that are in use are marked inactive instead (Active = No). Inactive records are hidden from pick lists but stay in the database, so past rounds and scores remain complete.
+
+## 3. Admin create/update/delete screens
+  - Create and update a league entering all values.  Option to copy values from prior league record
+  - Create and update a golf course including create and update holes
+  - Create update delete tee times.  Need to be able to shift tee times forward or backward at times due to season
+  - Create, update, and delete players
+  - Create, update, and delete groups. Assign players to a group, assign groups to tee times
+  - Create, update, and delete games
+  - Create, update, and delete rounds
+  - Create, update, and delete scores; mark which players have paid
+  - Activate a round - so it is available to play, assign groups to tee times
+  - Close a round - Set it as inactive - Run scoring on the round based on the game.  (Calculating new player handicaps: Phase 5.)
+  - Be able to send email to all players
+  - Be able to send text message to players that allow it (later phase)
+
+## 4. Player screens
+  - As player I want to be able to see a league status page that shows rounds played, rounds upcoming
+  - As player I want to be able to vote on the game to play in upcoming rounds (later phase)
+  - As player I want to be able to update my demographic information like email or phone number
+  - As player I want to be able to indicate if I will play in the upcoming round
+  - As player I want to be able to create my score and update my scores online for the current round
+  - As player I want to be able to upload a score card picture if I am unable to score in real-time
+  - As player I want to be able to send a message to my group (later phase)
+  - As player I want to be able to send a message to any other player (later phase)
+
+## 5. Guest screens
+  - As a guest I want to be able to see a league screen that describes the league and allows me to send a message to the admin.  The league screen can show some limited status as well.
+  - Until messaging is built (later phase), the guest screen shows the admin contact email from settings (2.10).
+
+## 6. Process
+  - Admin - Closes prior league.  Marks it inactive, all data is saved
+  - Admin - Creates a new league.  Option to copy values from prior league including players, groups, tee times, rounds, games. Copied rounds need their dates changed to the new season.
+  - Admin - Send email out to all prior players about the new upcoming league
+  - Players - May register for new league online. May pay online (later phase).  This either creates their new player record or modifies their existing record to work with new league
+  - Admin - For manual play registration either update existing player record or create new player record.
+  - Admin - Get and set tee times from the golf course.  Update the tee time records to match
+  - Admin - Create or edit groups and assign players, match groups to tee times.
+  - Admin - Create or update rounds - Set in dates and games that will be played
+
+  - At this point in time player league status page shows league schedule
+  - Players can drill down to see tee times and when they play and their group
+  - Players can login to their own status page that shows their rounds, scores, and they can indicate if they will play in the future rounds
+
+  - Admin closes prior round and activates current round a day or two before play. Once active it enables live scoring by players
+
+  - Round is played by all players
+
+  - Several days after played when all scores are in admin closes the round.  This just deactivates it so new scores cannot come in.
+  - Admin scores the round - Mostly automated but admin may make adjustments.  Payouts calculated
+  - Player status page for the round shows winners and payouts
+  - Email is sent to all players showing the round status and announcing the next up coming round.
+
+## 7. Technology & Hosting
+- **Language/Framework:** PHP 8.2+ / CodeIgniter 4.x
+- **Database:** SQLite in WAL mode.
+- **Front end:** server-rendered pages, mobile-first layout (score entry happens on the course on phones).
+- **Hosting Environment:** self-hosted on a home Linux PC.
+- **Network and SSL:** the site is published through a Cloudflare Tunnel (`cloudflared` running on the home PC).
+  - No router port forwarding or dynamic DNS is needed, and Cloudflare provides the SSL certificate. The domain's DNS must be managed by Cloudflare.
+  - The web server listens only on localhost; the home PC's firewall allows no inbound connections from the internet.
+  - **Real visitor IP:** all requests reach the app from `cloudflared` on `127.0.0.1`. CodeIgniter's trusted proxy setting (`Config\App::$proxyIPs`) must trust `127.0.0.1` and read the visitor's IP from Cloudflare's `CF-Connecting-IP` header. Without this, rate limiting would see every visitor as the same IP.
+  - **HTTPS behind the tunnel:** SSL ends at Cloudflare, so the app must be configured with an `https://` base URL, trust the forwarded protocol from `cloudflared`, and mark session cookies Secure.
+  - **Admin protection:** put the admin pages (`/admin/*`) behind Cloudflare Access (free tier), so admins must also confirm a one-time code sent to their email before reaching the admin login.
+  - **Rate limiting:** the app limits failed login and Member number attempts per visitor IP; also add a Cloudflare rate-limiting rule on the login and Member number pages.
+  - **Bot protection:** Cloudflare Turnstile (free) on any public form, such as online registration. The app verifies the Turnstile token on the server before processing the form.
+- **Email:** outgoing email is sent through FastMail's SMTP server (authenticated with an app password stored in the server's environment configuration, not in the code). Mail is never sent directly from the home server: residential ISPs commonly block port 25, and mail from a home IP is usually marked as spam. Emails to all players are sent in batches to stay within FastMail's sending limits. If the sending domain is on Cloudflare DNS, add FastMail's SPF and DKIM records there.
+- **Scheduled jobs:** run by cron on the home PC. Defined so far:
+  - Nightly database and uploads backup to a remote drive or cloud drive (SQLite online backup, plus the uploaded pictures folder).
+  - Sending queued batch emails.
+  - Other jobs will be added as needed.
+- **File storage:** uploaded pictures are stored on disk outside the web root, with file-type checks and a size limit (proposed 10 MB).
+  - Phone photos: accept HEIC (iPhone default) as well as JPEG and PNG, and convert HEIC to JPEG on upload. This needs ImageMagick (or libvips) built with HEIC support on the home PC; confirm this when setting up the server.
+  - Strip all photo metadata (EXIF), including GPS location, on upload.
+- **Timezone:** all dates and times (tee times, round dates) use the league's local timezone.
+- **Constraints:** _hardware specs, domain name (must use Cloudflare DNS)_
+
+### Ignore all below here for the time being
+
+### Games (earlier detailed version)
 - As admin, I want to be able to create/update/remove golf games. Each game has:
   - name, description, and game type (which selects the scoring function)
   - team/individual flag, and minimum/maximum team size for team games
