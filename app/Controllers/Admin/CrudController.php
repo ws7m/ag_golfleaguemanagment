@@ -17,6 +17,7 @@ use CodeIgniter\Model;
  *             select, checkbox, password
  *   required  Shows a required marker (the model does the real validation)
  *   options   For select: a Lookup method name (e.g. 'leagues') or id => label
+ *   listOptions  Shorter labels for the list page only (Lookup method name)
  *   default   Value for a new record; 'currentLeague' uses the current league
  *   help      Hint shown under the input
  *   readonly  Shown on the form but never saved from it (e.g. last login)
@@ -79,7 +80,7 @@ abstract class CrudController extends BaseController
     public function index(): string
     {
         $model  = $this->newModel();
-        $fields = $this->resolvedFields() + $this->listFields();
+        $fields = $this->resolvedFields(true) + $this->listFields();
         $active = [];
 
         foreach ($this->filters as $name) {
@@ -279,12 +280,16 @@ abstract class CrudController extends BaseController
     }
 
     /**
-     * Fields with select options loaded.
+     * Fields with select options loaded. For the list page, listOptions
+     * (shorter labels) are used where a field has them.
      */
-    protected function resolvedFields(): array
+    protected function resolvedFields(bool $forList = false): array
     {
         $fields = $this->fields();
         foreach ($fields as &$field) {
+            if ($forList && isset($field['listOptions'])) {
+                $field['options'] = $field['listOptions'];
+            }
             if (isset($field['options']) && is_string($field['options'])) {
                 $field['options'] = Lookup::{$field['options']}();
             }

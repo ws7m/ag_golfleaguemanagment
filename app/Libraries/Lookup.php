@@ -46,6 +46,16 @@ class Lookup
         return self::labels($rows, static fn ($r) => "{$r['last_name']}, {$r['first_name']} (#{$r['member_number']})");
     }
 
+    /**
+     * Short player labels for list pages: last name and first initial.
+     */
+    public static function playersShort(): array
+    {
+        $rows = (new PlayerModel())->findAll();
+
+        return self::labels($rows, static fn ($r) => $r['last_name'] . ', ' . mb_substr($r['first_name'], 0, 1));
+    }
+
     public static function games(): array
     {
         $rows = db_connect()->table('games g')
@@ -66,6 +76,16 @@ class Lookup
             ->get()->getResultArray();
 
         return self::labels($rows, static fn ($r) => ucfirst($r['nine']) . " {$r['tee_time']} ({$r['league']})");
+    }
+
+    /**
+     * Short tee time labels for list pages, without the league.
+     */
+    public static function teeTimesShort(): array
+    {
+        $rows = db_connect()->table('tee_times')->select('id, nine, tee_time')->get()->getResultArray();
+
+        return self::labels($rows, static fn ($r) => ucfirst($r['nine']) . " {$r['tee_time']}");
     }
 
     public static function groups(): array

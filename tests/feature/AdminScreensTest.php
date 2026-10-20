@@ -214,6 +214,27 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->assertMatchesRegularExpression('#Abbott</td>\s*<td>Amy</td>\s*<td>None</td>#', $html);
     }
 
+    public function testGroupListShowsShortTeeTimesAndPlayerNames(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'Monday League']);
+        $courseId = (new CourseModel())->insert(['name' => 'Course']);
+        $teeTime  = (new TeeTimeModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'front', 'tee_time' => '15:10']);
+        $player   = (new PlayerModel())->insert(['first_name' => 'Jordan', 'last_name' => 'Williams']);
+        db_connect()->table('league_groups')->insert([
+            'league_id' => $leagueId, 'group_number' => 2, 'front_tee_time_id' => $teeTime, 'player1_id' => $player, 'active' => 1,
+        ]);
+
+        $result = $this->asAdmin()->get('admin/groups?league_id=' . $leagueId);
+        $result->assertSee('<td>Front 15:10</td>');
+        $result->assertSee('<td>Williams, J</td>');
+        $result->assertDontSee('Front 15:10 (Monday League)');
+
+        // The edit form keeps the full labels.
+        $form = $this->asAdmin()->get('admin/groups/new');
+        $form->assertSee('Front 15:10 (Monday League)');
+        $form->assertSee('Williams, Jordan');
+    }
+
     public function testAdminCannotRemoveOwnAdminAccess(): void
     {
         $result = $this->asAdmin()->post("admin/players/{$this->adminId}", [
