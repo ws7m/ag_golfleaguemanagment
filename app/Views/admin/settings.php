@@ -10,18 +10,6 @@
 
 <form method="post" action="<?= site_url('admin/settings') ?>" class="form">
     <?= csrf_field() ?>
-    <h2>Player login</h2>
-    <p class="muted">All players log in with this one login ID and password, then enter their member number.</p>
-    <div class="field">
-        <label for="shared_login_id">Shared login ID</label>
-        <input type="text" id="shared_login_id" name="shared_login_id" value="<?= esc($settings['shared_login_id'] ?? '', 'attr') ?>" autocomplete="off">
-    </div>
-    <div class="field">
-        <label for="shared_password">Shared password</label>
-        <input type="password" id="shared_password" name="shared_password" autocomplete="new-password">
-        <small class="help"><?= empty($settings['shared_password_hash']) ? 'Not set yet — players cannot log in until it is.' : 'Set. Leave blank to keep the current password.' ?> At least 8 characters.</small>
-    </div>
-
     <h2>Admin contact</h2>
     <p class="muted">Shown to guests on the league page.</p>
     <div class="field">
@@ -35,4 +23,21 @@
 
     <div class="actions"><button type="submit">Save settings</button></div>
 </form>
+
+<section class="panel">
+    <h2>Admin-only accounts</h2>
+    <p class="muted">Admins who don't play in the league. They don't appear on the Players list.
+        To add one, add a player, tick Admin, and untick "Plays in the league".</p>
+    <?php if ($admins === []): ?>
+        <p class="muted">None.</p>
+    <?php else: ?>
+        <ul>
+            <?php foreach ($admins as $admin): ?>
+                <li><strong><?= esc($admin['login']) ?></strong> — <?= esc($admin['first_name'] . ' ' . $admin['last_name']) ?>
+                    <?= $admin['active'] ? '' : '(inactive)' ?>
+                    · <a href="<?= site_url("admin/players/{$admin['id']}/edit") ?>">Edit</a></li>
+            <?php endforeach ?>
+        </ul>
+    <?php endif ?>
+</section>
 <?= $this->endSection() ?>

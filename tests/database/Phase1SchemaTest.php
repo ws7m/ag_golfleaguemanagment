@@ -44,25 +44,41 @@ final class Phase1SchemaTest extends CIUnitTestCase
 
     public function testAdminSeederCreatesAdminWithHashedPassword(): void
     {
+        putenv('ADMIN_LOGIN=admin1');
         putenv('ADMIN_EMAIL=admin@example.com');
         putenv('ADMIN_PASSWORD=correct-horse');
-        putenv('ADMIN_FIRST_NAME=Pat');
-        putenv('ADMIN_LAST_NAME=Admin');
 
         ob_start();
         $this->seed(AdminSeeder::class);
         ob_end_clean();
 
         $players = new PlayerModel();
-        $this->assertNotNull($players->verifyAdmin('admin@example.com', 'correct-horse'));
-        $this->assertNull($players->verifyAdmin('admin@example.com', 'wrong-password'));
+        $this->assertNotNull($players->verifyLogin('admin1', 'correct-horse'));
+        $this->assertNull($players->verifyLogin('admin1', 'wrong-password'));
 
-        $admin = $players->where('email', 'admin@example.com')->first();
-        $this->assertArrayNotHasKey('admin_password_hash', $admin);
+        $admin = $players->where('login', 'admin1')->first();
+        $this->assertArrayNotHasKey('password_hash', $admin);
+        $this->assertSame(1, (int) $admin['is_admin']);
+        $this->assertSame(0, (int) $admin['is_player']);
         $this->seeInDatabase('settings', ['admin_contact_email' => 'admin@example.com']);
 
-        foreach (['ADMIN_EMAIL', 'ADMIN_PASSWORD', 'ADMIN_FIRST_NAME', 'ADMIN_LAST_NAME'] as $name) {
+        foreach (['ADMIN_LOGIN', 'ADMIN_EMAIL', 'ADMIN_PASSWORD'] as $name) {
             putenv($name);
+        }
+    }
+
+    public function testDefaultLoginIsFiveLettersOfLastNamePlusFirstInitial(): void
+    {
+        $this->assertSame('holbrm', PlayerModel::loginBase('Mark', 'Holbrook'));
+        $this->assertSame('catr', PlayerModel::loginBase('Ricky', 'Cat'));
+        $this->assertSame('obries', PlayerModel::loginBase('Sean', "O'Brien"));
+    }
+
+    public function testForeignKeysStillPointAtPlayersAfterMigrations(): void
+    {
+        foreach (['scores', 'league_groups'] as $table) {
+            $sql = $this->db->query("SELECT sql FROM sqlite_master WHERE name = '{$this->db->DBPrefix}{$table}'")->getRow()->sql;
+            $this->assertStringNotContainsString('temp_', $sql, "{$table} foreign keys point at a leftover temporary table");
         }
     }
 

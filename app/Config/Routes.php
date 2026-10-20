@@ -5,20 +5,17 @@ use CodeIgniter\Router\RouteCollection;
 /** @var RouteCollection $routes */
 $routes->get('/', 'Home::index');
 
-// Player login: shared login ID and password, then member number.
-$routes->get('login', 'Auth::playerLoginForm');
-$routes->post('login', 'Auth::playerLogin');
-$routes->post('login/member', 'Auth::playerMember');
-$routes->get('login/switch', 'Auth::switchMember');
+// One login for players and admins (each person's own login and password).
+$routes->get('login', 'Auth::loginForm');
+$routes->post('login', 'Auth::login');
+$routes->get('admin/login', 'Auth::loginForm');
 $routes->get('logout', 'Auth::logout');
 
 $routes->group('player', ['filter' => 'playerauth', 'namespace' => 'App\Controllers\Player'], static function ($routes) {
     $routes->get('/', 'Home::index');
 });
 
-// Admin login (email and password) and admin screens.
-$routes->get('admin/login', 'Auth::adminLoginForm');
-$routes->post('admin/login', 'Auth::adminLogin');
+// Admin screens.
 
 $routes->group('admin', ['filter' => 'adminauth', 'namespace' => 'App\Controllers\Admin'], static function ($routes) {
     $routes->get('/', 'Dashboard::index');

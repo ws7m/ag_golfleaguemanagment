@@ -41,9 +41,9 @@ final class AdminScreensTest extends CIUnitTestCase
 
         $players       = new PlayerModel();
         $this->adminId = (int) $players->insert([
-            'first_name' => 'Pat', 'last_name' => 'Admin', 'email' => 'admin@example.com', 'is_admin' => 1,
+            'login' => 'admin1', 'first_name' => 'Pat', 'last_name' => 'Admin', 'is_admin' => 1, 'is_player' => 0,
         ]);
-        $players->setAdminPassword($this->adminId, 'correct-horse');
+        $players->setPassword($this->adminId, 'correct-horse');
     }
 
     protected function tearDown(): void
@@ -67,24 +67,27 @@ final class AdminScreensTest extends CIUnitTestCase
 
     public function testAdminPagesRequireLogin(): void
     {
-        $this->get('admin/leagues')->assertRedirectTo('/admin/login');
+        $this->get('admin/leagues')->assertRedirectTo('/login');
     }
 
     public function testLoggedInAdminWhoNoLongerExistsIsLoggedOut(): void
     {
         $this->withSession(['admin_id' => 9999, 'admin_name' => 'Gone'])
             ->get('admin')
-            ->assertRedirectTo('/admin/login');
+            ->assertRedirectTo('/login');
     }
 
     public function testAdminLoginWithCorrectAndWrongPassword(): void
     {
-        $this->post('admin/login', ['email' => 'admin@example.com', 'password' => 'wrong-pass'])
+        $this->post('login', ['login' => 'admin1', 'password' => 'wrong-pass'])
             ->assertSessionMissing('admin_id');
 
-        $result = $this->post('admin/login', ['email' => 'admin@example.com', 'password' => 'correct-horse']);
+        // Logins work with any capitals.
+        $result = $this->post('login', ['login' => 'Admin1', 'password' => 'correct-horse']);
         $result->assertRedirectTo('/admin');
         $result->assertSessionHas('admin_id', $this->adminId);
+        // An admin-only account is not a player.
+        $result->assertSessionMissing('player_id');
 
         $admin = (new PlayerModel())->find($this->adminId);
         $this->assertNotNull($admin['last_login_at'], 'Admin login should record the login date.');
@@ -330,7 +333,7 @@ final class AdminScreensTest extends CIUnitTestCase
 
         $result = $this->asAdmin()->post("admin/players/{$playerId}", [
             'first_name' => 'Jo', 'last_name' => 'Golfer', 'league_id' => (string) $leagueId,
-            'winnings_cents' => '12.50', 'active' => '1',
+            'winnings_cents' => '12.50', 'active' => '1', 'is_player' => '1',
         ]);
         $result->assertRedirectTo('/admin/players');
         $this->seeInDatabase('players', ['id' => $playerId, 'winnings_cents' => 1250]);
@@ -386,21 +389,61 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->asAdmin()->post('admin/scores', $post)->assertSee('already has a score');
     }
 
-    public function testPlayerLoginWithSharedPasswordAndMemberNumber(): void
+    public function testNewPlayerGetsDefaultLoginAndCanLogInWithPasswordSetByAdmin(): void
     {
-        $this->asAdmin()->post('admin/settings', ['shared_login_id' => 'golfers', 'shared_password' => 'tee-off-2027'])
-            ->assertSessionHas('message');
-        $player = (new PlayerModel())->find((new PlayerModel())->insert(['first_name' => 'Jo', 'last_name' => 'Golfer']));
+        $this->asAdmin()->post('admin/players', [
+            'first_name' => 'Mark', 'last_name' => 'Holbrook', 'password' => 'fairway-27', 'active' => '1', 'is_player' => '1',
+        ])->assertRedirectTo('/admin/players');
+        $player = (new PlayerModel())->where('last_name', 'Holbrook')->first();
+        $this->assertSame('holbrm', $player['login']);
+        $this->assertArrayNotHasKey('password_hash', $player);
 
-        $this->post('login', ['login_id' => 'golfers', 'password' => 'wrong-password'])->assertSessionMissing('shared_login_ok');
+        // A second Mark Holbrook gets the next free login.
+        $this->asAdmin()->post('admin/players', ['first_name' => 'Mary', 'last_name' => 'Holbrooke', 'active' => '1', 'is_player' => '1']);
+        $this->seeInDatabase('players', ['first_name' => 'Mary', 'login' => 'holbrm2']);
 
-        $this->post('login', ['login_id' => 'golfers', 'password' => 'tee-off-2027'])->assertSessionHas('shared_login_ok', true);
+        $this->post('login', ['login' => 'holbrm', 'password' => 'wrong-password'])->assertSessionMissing('player_id');
 
-        $result = $this->withSession(['shared_login_ok' => true])
-            ->post('login/member', ['member_number' => (string) $player['member_number']]);
+        $result = $this->post('login', ['login' => 'holbrm', 'password' => 'fairway-27']);
         $result->assertRedirectTo('/player');
         $result->assertSessionHas('player_id', (int) $player['id']);
+        $result->assertSessionMissing('admin_id');
 
         $this->assertNotNull((new PlayerModel())->find($player['id'])['last_login_at'], 'Player login should record the login date.');
+    }
+
+    public function testAdminCanSetLoginAndPasswordOnEdit(): void
+    {
+        $playerId = (int) (new PlayerModel())->insert(['first_name' => 'Jo', 'last_name' => 'Golfer']);
+
+        $this->asAdmin()->post("admin/players/{$playerId}", [
+            'first_name' => 'Jo', 'last_name' => 'Golfer', 'login' => 'JoG', 'password' => 'short', 'active' => '1',
+        ])->assertSee('at least 8 characters');
+
+        $this->asAdmin()->post("admin/players/{$playerId}", [
+            'first_name' => 'Jo', 'last_name' => 'Golfer', 'login' => 'JoG', 'password' => 'putting-27', 'active' => '1',
+        ])->assertRedirectTo('/admin/players');
+        $this->assertNotNull((new PlayerModel())->verifyLogin('jog', 'putting-27'));
+
+        // Clearing the login sets it again from the name.
+        $this->asAdmin()->post("admin/players/{$playerId}", [
+            'first_name' => 'Jo', 'last_name' => 'Golfer', 'login' => '', 'active' => '1',
+        ]);
+        $this->seeInDatabase('players', ['id' => $playerId, 'login' => 'golfej']);
+        // Leaving the password blank kept it.
+        $this->assertNotNull((new PlayerModel())->verifyLogin('golfej', 'putting-27'));
+
+        // Another player's login is refused.
+        $otherId = (int) (new PlayerModel())->insert(['first_name' => 'Al', 'last_name' => 'Other']);
+        $this->asAdmin()->post("admin/players/{$otherId}", [
+            'first_name' => 'Al', 'last_name' => 'Other', 'login' => 'GOLFEJ', 'active' => '1',
+        ])->assertSee('already used by another player');
+    }
+
+    public function testAdminOnlyAccountIsHiddenFromPlayerListsButShownInSettings(): void
+    {
+        $this->asAdmin()->get('admin/players')->assertDontSee('admin1');
+        $this->asAdmin()->get('admin/groups/new')->assertDontSee('Admin, Pat');
+        $this->asAdmin()->get('admin/settings')->assertSee('admin1');
     }
 }

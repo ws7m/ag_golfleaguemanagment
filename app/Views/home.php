@@ -15,7 +15,6 @@
 <?php endif ?>
 
 <p class="actions">
-    <a class="button" href="<?= site_url('login') ?>">Player login</a>
-    <a class="button button-secondary" href="<?= site_url('admin/login') ?>">Admin login</a>
+    <a class="button" href="<?= site_url('login') ?>">Log in</a>
 </p>
 <?= $this->endSection() ?>

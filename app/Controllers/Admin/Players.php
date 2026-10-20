@@ -11,8 +11,10 @@ class Players extends CrudController
     protected string $title      = 'Players';
     protected string $singular   = 'Player';
     protected string $baseRoute  = 'admin/players';
-    protected array $listColumns = ['member_number', 'last_name', 'first_name', 'group', 'flight', 'handicap', 'tee', 'winnings', 'is_admin', 'last_login_at', 'active'];
+    protected array $listColumns = ['login', 'last_name', 'first_name', 'group', 'flight', 'handicap', 'tee', 'winnings', 'is_admin', 'last_login_at', 'active'];
     protected array $filters     = ['league_id'];
+    // Admin-only accounts (not league players) are listed on the Settings page.
+    protected array $listWhere   = ['is_player' => 1];
     // By last name, then first name, ignoring capitals. Other sorts are
     // applied in listRows().
     protected array $orderBy     = ['LOWER(last_name)' => 'ASC', 'LOWER(first_name)' => 'ASC'];
@@ -95,6 +97,8 @@ class Players extends CrudController
         return [
             'first_name'            => ['label' => 'First name', 'required' => true],
             'last_name'             => ['label' => 'Last name', 'required' => true],
+            'login'                 => ['label' => 'Login', 'help' => 'Leave blank to set it from the last name and first initial, e.g. Mark Holbrook → holbrm.'],
+            'password'              => ['label' => 'Password', 'type' => 'password', 'help' => 'At least 8 characters. Leave blank to keep the current password.'],
             'member_number'         => ['label' => 'Member number', 'type' => 'number', 'help' => 'Leave blank to assign a random 3-digit number (100–999).'],
             'league_id'             => ['label' => 'League', 'type' => 'select', 'options' => 'leagues', 'default' => 'currentLeague', 'help' => 'The league the player is registered in.'],
             'gender'                => ['label' => 'Male or female', 'type' => 'select', 'options' => ['M' => 'Male', 'F' => 'Female']],
@@ -109,7 +113,7 @@ class Players extends CrudController
             'winnings_cents'        => ['label' => 'Winnings', 'type' => 'money', 'compact' => 'winnings', 'help' => 'Entered by you. Added to winnings from scored rounds.'],
             'round_winnings'        => ['label' => 'From scored rounds', 'type' => 'money', 'readonly' => true, 'compact' => 'winnings'],
             'is_admin'              => ['label' => 'Admin', 'type' => 'checkbox'],
-            'admin_password'        => ['label' => 'Admin password', 'type' => 'password', 'help' => 'Only for admins. At least 8 characters. Leave blank to keep the current password.'],
+            'is_player'             => ['label' => 'Plays in the league', 'type' => 'checkbox', 'default' => 1, 'help' => 'Untick for admin-only accounts. They are hidden from player lists and shown under Settings.'],
             'last_login_at'         => ['label' => 'Last login', 'readonly' => true],
             'active'                => ['label' => 'Active', 'type' => 'checkbox', 'default' => 1],
         ];
@@ -139,14 +143,24 @@ class Players extends CrudController
         return array_map('intval', array_column($query->get()->getResultArray(), 'total', 'player_id'));
     }
 
+    /**
+     * Logins are stored in lower case so they work with any capitals.
+     */
+    protected function collect(): array
+    {
+        $data = parent::collect();
+        if ($data['login'] !== null) {
+            $data['login'] = strtolower($data['login']);
+        }
+
+        return $data;
+    }
+
     protected function checkBeforeSave(array $data, ?int $id): ?string
     {
-        $password = (string) ($data['admin_password'] ?? '');
+        $password = (string) ($data['password'] ?? '');
         if ($password !== '' && strlen($password) < 8) {
-            return 'The admin password must be at least 8 characters.';
-        }
-        if ($password !== '' && empty($data['is_admin'])) {
-            return 'Tick Admin to give this player an admin password.';
+            return 'The password must be at least 8 characters.';
         }
 
         // Stop admins from locking themselves out.
@@ -160,8 +174,8 @@ class Players extends CrudController
 
     protected function afterSave(int $id, array $data): void
     {
-        if (! empty($data['admin_password'])) {
-            (new PlayerModel())->setAdminPassword($id, $data['admin_password']);
+        if (! empty($data['password'])) {
+            (new PlayerModel())->setPassword($id, $data['password']);
         }
     }
 }

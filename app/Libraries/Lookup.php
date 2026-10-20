@@ -41,7 +41,7 @@ class Lookup
 
     public static function players(): array
     {
-        $rows = (new PlayerModel())->orderBy('last_name')->orderBy('first_name')->findAll();
+        $rows = (new PlayerModel())->where('is_player', 1)->orderBy('last_name')->orderBy('first_name')->findAll();
 
         return self::labels($rows, static fn ($r) => "{$r['last_name']}, {$r['first_name']} (#{$r['member_number']})");
     }
@@ -51,7 +51,7 @@ class Lookup
      */
     public static function playersShort(): array
     {
-        $rows = (new PlayerModel())->findAll();
+        $rows = (new PlayerModel())->where('is_player', 1)->findAll();
 
         return self::labels($rows, static fn ($r) => $r['last_name'] . ', ' . mb_substr($r['first_name'], 0, 1));
     }

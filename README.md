@@ -32,10 +32,11 @@ See [design.md](design.md) for the design.
    ```bash
    php spark migrate
    ```
-5. Create the admin player. The password is given only on the command line,
-   so it is never saved in the project. Running it again updates the password.
+5. Create the initial admin account (login `admin1`, admin-only, not a league
+   player). The password is given only on the command line, so it is never
+   saved in the project. Running it again resets the password.
    ```bash
-   ADMIN_EMAIL='you@example.com' ADMIN_PASSWORD='your-password' ADMIN_FIRST_NAME='First' ADMIN_LAST_NAME='Last' php spark db:seed AdminSeeder
+   ADMIN_LOGIN='admin1' ADMIN_PASSWORD='your-password' php spark db:seed AdminSeeder
    ```
 
 ## Run it

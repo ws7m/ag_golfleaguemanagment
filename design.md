@@ -78,7 +78,9 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
 - As admin, I want to be able to create/update/delete players
 - As player, I want to be able to update my demographic information
   - Id
-  - Member number - Unique, random, non-sequential 3-digit number (100–999) the player enters to log in (see 2.10)
+  - Member number - Unique, random 3-digit number (100–999)
+  - Login - Unique; by default up to 5 letters of the last name plus the first initial, lower case (Mark Holbrook → holbrm; a duplicate gets 2, 3, ... added). Admin can change it. (see 2.10)
+  - Password - Hashed; set by the admin on the player edit screen (see 2.10)
   - League Id - Set to league when player pays and registers
   - First name
   - Last name
@@ -92,7 +94,8 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
   - Desired tee time - Hour and minute
   - Desired group members - CSV names
   - IsAdmin
-  - Admin password - Hashed; only for admins (see 2.10)
+  - IsPlayer - Plays in the league. Admin-only accounts (IsPlayer = No) are hidden from player lists.
+  - Winnings - Entered by admin; added to winnings from scored rounds
   - Last login - Date and time the player (or admin) last logged in; set automatically
   - Active
 
@@ -170,12 +173,11 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
 ### 2.10 Settings and login
 - One settings record for the site:
   - Id
-  - Shared login ID
-  - Shared password - Hashed
   - Admin contact name
   - Admin contact email
-- **Player login:** all players log in with the one shared login ID and password, then enter their Member number to identify themselves. This keeps login simple: players have no individual passwords to forget. Anyone who has the shared password and knows another player's Member number can act as that player, which is why Member numbers are random rather than sequential. Member numbers are 3 digits so they are easy to remember; because that makes them easier to guess, wrong Member number attempts are limited per visitor IP.
-- **Admin login:** admins log in with their own email and Admin password.
+- **Login:** everyone, players and admins, logs in on one page with their own Login and Password. Logins work with any capitals. Admins go to the admin pages; players go to their player page. Failed attempts are limited per visitor IP.
+- The admin sets each player's password on the player edit screen (at least 8 characters, stored as a hash). A player without a password can't log in yet.
+- **Initial admin:** an admin-only account with login `admin1`, created by the AdminSeeder. It is not a league player, so it does not appear in player lists; admin-only accounts are listed on the Settings page.
 
 ### 2.11 Deleting records
 - A record can be deleted only if nothing points to it. For example, a course with holes, tee times or rounds, a player with scores, a game used by a round, or a round with scores cannot be deleted.

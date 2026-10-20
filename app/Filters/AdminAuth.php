@@ -24,7 +24,7 @@ class AdminAuth implements FilterInterface
                 session()->remove(['admin_id', 'admin_name']);
             }
 
-            return redirect()->to('admin/login')->with('error', 'Please log in as an admin.');
+            return redirect()->to('login')->with('error', 'Please log in as an admin.');
         }
     }
 

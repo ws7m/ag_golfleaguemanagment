@@ -8,40 +8,48 @@ use CodeIgniter\Database\Seeder;
 use RuntimeException;
 
 /**
- * Creates the default admin player, or updates their password if they exist.
+ * Creates the initial admin account, or resets its password if it exists.
+ * The initial admin is admin-only: not a league player, so it is not on the
+ * player lists.
  *
  * The password is read from the environment so it is never stored in the repo:
  *
- *   ADMIN_EMAIL=you@example.com ADMIN_PASSWORD='...' \
- *   ADMIN_FIRST_NAME=First ADMIN_LAST_NAME=Last php spark db:seed AdminSeeder
+ *   ADMIN_LOGIN=admin1 ADMIN_PASSWORD='...' php spark db:seed AdminSeeder
  *
- * Also creates the settings row, with the admin as the contact, if it is missing.
+ * Optional: ADMIN_EMAIL, ADMIN_FIRST_NAME, ADMIN_LAST_NAME. If there is no
+ * settings row yet, one is created with the admin as the contact.
  */
 class AdminSeeder extends Seeder
 {
     public function run()
     {
-        $email     = trim((string) getenv('ADMIN_EMAIL'));
+        $login     = strtolower(trim((string) getenv('ADMIN_LOGIN'))) ?: 'admin1';
         $password  = (string) getenv('ADMIN_PASSWORD');
-        $firstName = trim((string) getenv('ADMIN_FIRST_NAME')) ?: 'Admin';
-        $lastName  = trim((string) getenv('ADMIN_LAST_NAME')) ?: 'User';
+        $email     = trim((string) getenv('ADMIN_EMAIL')) ?: null;
+        $firstName = trim((string) getenv('ADMIN_FIRST_NAME')) ?: 'League';
+        $lastName  = trim((string) getenv('ADMIN_LAST_NAME')) ?: 'Admin';
 
-        if ($email === '' || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            throw new RuntimeException('Set ADMIN_EMAIL to a valid email address.');
+        if (! ctype_alnum($login)) {
+            throw new RuntimeException('ADMIN_LOGIN can only contain letters and numbers.');
         }
         if (strlen($password) < 8) {
             throw new RuntimeException('Set ADMIN_PASSWORD to at least 8 characters.');
         }
+        if ($email !== null && ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            throw new RuntimeException('ADMIN_EMAIL is not a valid email address.');
+        }
 
         $players  = new PlayerModel();
-        $existing = $players->where('email', $email)->where('is_admin', 1)->first();
+        $existing = $players->where('login', $login)->first();
 
         if ($existing === null) {
             $id = $players->insert([
+                'login'      => $login,
                 'first_name' => $firstName,
                 'last_name'  => $lastName,
                 'email'      => $email,
                 'is_admin'   => 1,
+                'is_player'  => 0,
                 'active'     => 1,
             ]);
             if ($id === false) {
@@ -49,11 +57,12 @@ class AdminSeeder extends Seeder
             }
             $action = 'Created';
         } else {
-            $id     = (int) $existing['id'];
+            $id = (int) $existing['id'];
+            $players->update($id, ['id' => $id, 'is_admin' => 1, 'is_player' => 0, 'active' => 1]);
             $action = 'Updated';
         }
 
-        $players->setAdminPassword((int) $id, $password);
+        $players->setPassword((int) $id, $password);
 
         $settings = new SettingModel();
         if ($settings->countAllResults() === 0) {
@@ -63,8 +72,6 @@ class AdminSeeder extends Seeder
             ]);
         }
 
-        $player = $players->find($id);
-        echo "{$action} admin {$player['first_name']} {$player['last_name']} <{$email}>, "
-            . "member number {$player['member_number']}." . PHP_EOL;
+        echo "{$action} admin-only account \"{$login}\"." . PHP_EOL;
     }
 }

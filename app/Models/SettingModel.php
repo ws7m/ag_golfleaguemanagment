@@ -10,7 +10,7 @@ class SettingModel extends Model
     protected $primaryKey    = 'id';
     protected $returnType    = 'array';
     protected $useTimestamps = true;
-    protected $allowedFields = ['shared_login_id', 'shared_password_hash', 'admin_contact_name', 'admin_contact_email'];
+    protected $allowedFields = ['admin_contact_name', 'admin_contact_email'];
 
     protected $validationRules = [
         'admin_contact_email' => 'permit_empty|valid_email',

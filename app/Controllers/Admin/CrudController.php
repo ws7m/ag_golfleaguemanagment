@@ -39,6 +39,9 @@ abstract class CrudController extends BaseController
     /** @var list<string> Field names shown as columns on the list page */
     protected array $listColumns = [];
 
+    /** @var array<string, mixed> Conditions always applied to the list page */
+    protected array $listWhere = [];
+
     /** @var list<string> Fields the list can be filtered by (select fields) */
     protected array $filters = [];
 
@@ -93,6 +96,9 @@ abstract class CrudController extends BaseController
         $fields = $this->resolvedFields(true) + $this->listFields();
         $active = [];
 
+        if ($this->listWhere !== []) {
+            $model->where($this->listWhere);
+        }
         foreach ($this->filters as $name) {
             $value = $this->request->getGet($name);
             if ($value === null && ($this->fields()[$name]['default'] ?? null) === 'currentLeague') {

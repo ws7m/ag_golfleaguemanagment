@@ -3,10 +3,12 @@
 namespace App\Controllers\Admin;
 
 use App\Controllers\BaseController;
+use App\Models\PlayerModel;
 use App\Models\SettingModel;
 
 /**
- * Site settings: the shared player login and the admin contact shown to guests.
+ * Site settings: the admin contact shown to guests, plus a list of admin-only
+ * accounts (admins who are not league players, so not on the Players list).
  */
 class Settings extends BaseController
 {
@@ -15,44 +17,35 @@ class Settings extends BaseController
         return view('admin/settings', [
             'title'    => 'Settings',
             'settings' => (new SettingModel())->first() ?? [],
+            'admins'   => $this->adminOnlyAccounts(),
             'errors'   => [],
         ]);
     }
 
     public function update()
     {
-        $model    = new SettingModel();
-        $current  = $model->first();
-        $password = (string) $this->request->getPost('shared_password');
-        $data     = [
-            'shared_login_id'     => trim((string) $this->request->getPost('shared_login_id')) ?: null,
+        $model   = new SettingModel();
+        $current = $model->first();
+        $data    = [
             'admin_contact_name'  => trim((string) $this->request->getPost('admin_contact_name')) ?: null,
             'admin_contact_email' => trim((string) $this->request->getPost('admin_contact_email')) ?: null,
         ];
 
-        $errors = [];
-        if ($password !== '' && strlen($password) < 8) {
-            $errors[] = 'The shared password must be at least 8 characters.';
-        }
-        if ($password !== '' && $data['shared_login_id'] === null) {
-            $errors[] = 'Enter a shared login ID to go with the password.';
-        }
-        if ($password !== '') {
-            $data['shared_password_hash'] = password_hash($password, PASSWORD_DEFAULT);
-        }
-
-        if ($errors === []) {
-            $saved = $current ? $model->update($current['id'], $data) : $model->insert($data);
-            if ($saved !== false) {
-                return redirect()->to('admin/settings')->with('message', 'Settings saved.');
-            }
-            $errors = array_values($model->errors());
+        $saved = $current ? $model->update($current['id'], $data) : $model->insert($data);
+        if ($saved !== false) {
+            return redirect()->to('admin/settings')->with('message', 'Settings saved.');
         }
 
         return view('admin/settings', [
             'title'    => 'Settings',
             'settings' => $data + ($current ?? []),
-            'errors'   => $errors,
+            'admins'   => $this->adminOnlyAccounts(),
+            'errors'   => array_values($model->errors()),
         ]);
+    }
+
+    private function adminOnlyAccounts(): array
+    {
+        return (new PlayerModel())->where('is_player', 0)->orderBy('login')->findAll();
     }
 }
