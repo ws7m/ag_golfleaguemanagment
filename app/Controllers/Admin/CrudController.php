@@ -41,7 +41,10 @@ abstract class CrudController extends BaseController
     /** @var list<string> Fields the list can be filtered by (select fields) */
     protected array $filters = [];
 
-    /** @var array<string, string> Column => ASC|DESC for the list order */
+    /**
+     * @var array<string, string> Column => ASC|DESC for the list order. A
+     *      column may be an SQL expression such as 'LOWER(last_name)'.
+     */
     protected array $orderBy = ['id' => 'ASC'];
 
     /** Extra view shown under the list (e.g. the tee time shift form) */
@@ -52,10 +55,31 @@ abstract class CrudController extends BaseController
      */
     abstract protected function fields(): array;
 
+    /**
+     * Columns shown only on the list page, worked out in listRows() rather
+     * than stored in the table. Same settings as fields().
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    protected function listFields(): array
+    {
+        return [];
+    }
+
+    /**
+     * Adds values for listFields() to the rows on the list page.
+     *
+     * @param array<string, string> $filterValues The list filters in use
+     */
+    protected function listRows(array $rows, array $filterValues): array
+    {
+        return $rows;
+    }
+
     public function index(): string
     {
         $model  = $this->newModel();
-        $fields = $this->resolvedFields();
+        $fields = $this->resolvedFields() + $this->listFields();
         $active = [];
 
         foreach ($this->filters as $name) {
@@ -69,12 +93,13 @@ abstract class CrudController extends BaseController
             }
         }
         foreach ($this->orderBy as $column => $direction) {
-            $model->orderBy($column, $direction);
+            // Expressions like LOWER(name) must not be quoted as a column name.
+            $model->orderBy($column, $direction, ! str_contains($column, '('));
         }
 
         return view('admin/crud/index', $this->viewData([
             'fields'         => $fields,
-            'rows'           => $model->findAll(),
+            'rows'           => $this->listRows($model->findAll(), $active),
             'filterValues'   => $active,
             'extraIndexView' => $this->extraIndexView,
         ]));

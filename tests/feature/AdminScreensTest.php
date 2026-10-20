@@ -170,6 +170,50 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->seeInDatabase('tee_times', ['id' => $first, 'tee_time' => '14:50']);
     }
 
+    public function testEditAndSavePlayer(): void
+    {
+        $players  = new PlayerModel();
+        $playerId = (int) $players->insert(['first_name' => 'Jo', 'last_name' => 'Golfer']);
+        $number   = (int) $players->find($playerId)['member_number'];
+
+        $result = $this->asAdmin()->post("admin/players/{$playerId}", [
+            'first_name' => 'Joanne', 'last_name' => 'Golfer', 'member_number' => (string) $number,
+            'flight' => '2', 'handicap' => '8', 'active' => '1',
+        ]);
+        $result->assertRedirectTo('/admin/players');
+        $this->seeInDatabase('players', ['id' => $playerId, 'first_name' => 'Joanne', 'member_number' => $number, 'flight' => 2]);
+
+        // Another player's member number is refused.
+        $otherId = (int) $players->insert(['first_name' => 'Al', 'last_name' => 'Other']);
+        $result  = $this->asAdmin()->post("admin/players/{$otherId}", [
+            'first_name' => 'Al', 'last_name' => 'Other', 'member_number' => (string) $number, 'active' => '1',
+        ]);
+        $result->assertOK();
+        $result->assertSee('flash-error');
+    }
+
+    public function testPlayerListIsByLastNameAndShowsGroup(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
+        $players  = new PlayerModel();
+        $zed      = (int) $players->insert(['first_name' => 'Zoe', 'last_name' => 'Zed', 'league_id' => $leagueId]);
+        $players->insert(['first_name' => 'Dan', 'last_name' => 'deVries', 'league_id' => $leagueId]);
+        $players->insert(['first_name' => 'Amy', 'last_name' => 'Abbott', 'league_id' => $leagueId]);
+        db_connect()->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 4, 'player1_id' => $zed, 'active' => 1]);
+
+        $result = $this->asAdmin()->get('admin/players?league_id=' . $leagueId);
+        $result->assertOK();
+        $html = $result->getBody();
+
+        // Sorted by last name ignoring capitals: Abbott, deVries, Zed.
+        $this->assertLessThan(strpos($html, 'deVries'), strpos($html, 'Abbott'));
+        $this->assertLessThan(strpos($html, 'Zed'), strpos($html, 'deVries'));
+
+        // Zed is in group 4; the others show None.
+        $this->assertMatchesRegularExpression('#Zed</td>\s*<td>Zoe</td>\s*<td>Group 4</td>#', $html);
+        $this->assertMatchesRegularExpression('#Abbott</td>\s*<td>Amy</td>\s*<td>None</td>#', $html);
+    }
+
     public function testAdminCannotRemoveOwnAdminAccess(): void
     {
         $result = $this->asAdmin()->post("admin/players/{$this->adminId}", [

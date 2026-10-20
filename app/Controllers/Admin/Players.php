@@ -2,6 +2,7 @@
 
 namespace App\Controllers\Admin;
 
+use App\Models\LeagueGroupModel;
 use App\Models\PlayerModel;
 
 class Players extends CrudController
@@ -10,9 +11,49 @@ class Players extends CrudController
     protected string $title      = 'Players';
     protected string $singular   = 'Player';
     protected string $baseRoute  = 'admin/players';
-    protected array $listColumns = ['member_number', 'last_name', 'first_name', 'flight', 'handicap', 'tee', 'is_admin', 'last_login_at', 'active'];
+    protected array $listColumns = ['member_number', 'last_name', 'first_name', 'group', 'flight', 'handicap', 'tee', 'is_admin', 'last_login_at', 'active'];
     protected array $filters     = ['league_id'];
-    protected array $orderBy     = ['last_name' => 'ASC', 'first_name' => 'ASC'];
+    // By last name, then first name, ignoring capitals.
+    protected array $orderBy = ['LOWER(last_name)' => 'ASC', 'LOWER(first_name)' => 'ASC'];
+
+    protected function listFields(): array
+    {
+        return ['group' => ['label' => 'Group']];
+    }
+
+    /**
+     * Adds the group each player is on the roster of, or "None".
+     * Only active groups count. With the list showing a single league, only
+     * that league's groups are used; with all leagues, the league is named.
+     */
+    protected function listRows(array $rows, array $filterValues): array
+    {
+        $groups = db_connect()->table('league_groups g')
+            ->select('g.*, l.name AS league')
+            ->join('leagues l', 'l.id = g.league_id')
+            ->where('g.active', 1)
+            ->orderBy('g.group_number');
+        if (isset($filterValues['league_id'])) {
+            $groups->where('g.league_id', $filterValues['league_id']);
+        }
+
+        $byPlayer = [];
+        foreach ($groups->get()->getResultArray() as $group) {
+            $label = 'Group ' . $group['group_number'];
+            if (! isset($filterValues['league_id'])) {
+                $label .= " ({$group['league']})";
+            }
+            foreach (LeagueGroupModel::playerIds($group) as $playerId) {
+                $byPlayer[$playerId][] = $label;
+            }
+        }
+
+        foreach ($rows as &$row) {
+            $row['group'] = isset($byPlayer[(int) $row['id']]) ? implode(', ', $byPlayer[(int) $row['id']]) : 'None';
+        }
+
+        return $rows;
+    }
 
     protected function fields(): array
     {
