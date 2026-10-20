@@ -45,6 +45,23 @@ php spark serve
 ```
 Then open http://localhost:8080/ in a browser. Press Ctrl+C to stop the server.
 
+## Test on your phone
+1. Start the server so other devices can reach it:
+   ```bash
+   php spark serve --host 0.0.0.0 --port 8080
+   ```
+2. Find the laptop's IP address on your Wi-Fi:
+   ```bash
+   ipconfig getifaddr en0
+   ```
+3. On the phone (same Wi-Fi, not a guest network), open `http://<laptop IP>:8080`.
+   If macOS asks whether to allow `php` to accept incoming connections, allow it.
+
+In development mode the site builds its links and redirects from the address
+you browsed to, as long as it is a local-network address (see
+`app/Config/App.php`), so nothing needs to be configured. Only do this on a
+network you trust: development mode shows detailed error pages.
+
 ## Run the tests
 ```bash
 vendor/bin/phpunit

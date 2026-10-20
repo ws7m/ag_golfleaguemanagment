@@ -31,6 +31,55 @@ class App extends BaseConfig
      */
     public array $allowedHostnames = [];
 
+    public function __construct()
+    {
+        parent::__construct();
+
+        // In development, build links and redirects from the address the
+        // request came in on, so the site works from a phone on the same Wi-Fi
+        // at http://<laptop IP>:8080 without setting the IP anywhere. Only
+        // local-network addresses are accepted: trusting any Host header would
+        // let a request point the site's links at another domain. Production
+        // always uses the fixed baseURL.
+        if (ENVIRONMENT === 'development') {
+            $host = self::requestHost();
+            if ($host !== null && self::isLocalNetworkHost($host)) {
+                $this->allowedHostnames[] = $host;
+            }
+        }
+    }
+
+    /**
+     * The host name of the current web request, without the port, or null.
+     */
+    private static function requestHost(): ?string
+    {
+        $host = $_SERVER['HTTP_HOST'] ?? null;
+        if (! is_string($host) || $host === '') {
+            return null;
+        }
+        $host = parse_url('http://' . $host, PHP_URL_HOST);
+
+        return is_string($host) ? strtolower(trim($host, '[]')) : null;
+    }
+
+    /**
+     * True for localhost, *.local names, and private or loopback IP addresses.
+     */
+    private static function isLocalNetworkHost(string $host): bool
+    {
+        if ($host === 'localhost' || str_ends_with($host, '.local')) {
+            return true;
+        }
+        if (filter_var($host, FILTER_VALIDATE_IP) === false) {
+            return false;
+        }
+
+        // An IP that fails the "no private / no reserved" check is a private
+        // (10.x, 172.16-31.x, 192.168.x) or loopback address.
+        return filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
+    }
+
     /**
      * --------------------------------------------------------------------------
      * Index File
