@@ -341,6 +341,22 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->asAdmin()->get("admin/players?league_id={$leagueId}")->assertSee('$17.50');
     }
 
+    public function testScoresListShowsGroupWithoutLeague(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'Monday League']);
+        $courseId = (new CourseModel())->insert(['name' => 'Course']);
+        $roundId  = (new RoundModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-05-03']);
+        $playerId = (new PlayerModel())->insert(['first_name' => 'Jo', 'last_name' => 'Golfer']);
+        $db       = db_connect();
+        $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 3, 'active' => 1]);
+        $groupId = $db->insertID();
+        $db->table('scores')->insert(['league_id' => $leagueId, 'player_id' => $playerId, 'round_id' => $roundId, 'group_id' => $groupId]);
+
+        $result = $this->asAdmin()->get("admin/scores?round_id={$roundId}");
+        $result->assertSee('<td>Group 3</td>');
+        $result->assertDontSee('Group 3 (Monday League)');
+    }
+
     public function testAdminCannotRemoveOwnAdminAccess(): void
     {
         $result = $this->asAdmin()->post("admin/players/{$this->adminId}", [

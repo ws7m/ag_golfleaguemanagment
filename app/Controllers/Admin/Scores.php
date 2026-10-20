@@ -21,7 +21,7 @@ class Scores extends CrudController
         $fields = [
             'round_id'  => ['label' => 'Round', 'type' => 'select', 'options' => 'rounds', 'required' => true],
             'player_id' => ['label' => 'Player', 'type' => 'select', 'options' => 'players', 'required' => true],
-            'group_id'  => ['label' => 'Group played in', 'type' => 'select', 'options' => 'groups'],
+            'group_id'  => ['label' => 'Group played in', 'type' => 'select', 'options' => 'groups', 'listOptions' => 'groupsShort'],
             'nine'      => ['label' => 'Nine played', 'type' => 'select', 'options' => ['front' => 'Front', 'back' => 'Back']],
             'playing'   => ['label' => 'Playing', 'type' => 'checkbox', 'default' => 1],
             'paid'      => ['label' => 'Paid', 'type' => 'checkbox'],

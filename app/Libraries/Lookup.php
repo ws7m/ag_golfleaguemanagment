@@ -99,6 +99,16 @@ class Lookup
         return self::labels($rows, static fn ($r) => "Group {$r['group_number']} ({$r['league']})");
     }
 
+    /**
+     * Short group labels for list pages, without the league.
+     */
+    public static function groupsShort(): array
+    {
+        $rows = db_connect()->table('league_groups')->select('id, group_number, active')->get()->getResultArray();
+
+        return self::labels($rows, static fn ($r) => "Group {$r['group_number']}");
+    }
+
     public static function rounds(): array
     {
         $rows = db_connect()->table('rounds r')
