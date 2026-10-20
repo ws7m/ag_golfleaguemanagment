@@ -199,7 +199,7 @@ final class AdminScreensTest extends CIUnitTestCase
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'League']);
         $players  = new PlayerModel();
-        $zed      = (int) $players->insert(['first_name' => 'Zoe', 'last_name' => 'Zed', 'league_id' => $leagueId]);
+        $zed      = (int) $players->insert(['first_name' => 'Zoe', 'last_name' => 'Zed', 'league_id' => $leagueId, 'phone' => '555-0101', 'email' => 'zoe@example.com']);
         $players->insert(['first_name' => 'Dan', 'last_name' => 'deVries', 'league_id' => $leagueId]);
         $players->insert(['first_name' => 'Amy', 'last_name' => 'Abbott', 'league_id' => $leagueId]);
         db_connect()->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 4, 'player1_id' => $zed, 'active' => 1]);
@@ -212,9 +212,9 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->assertLessThan(strpos($html, 'deVries'), strpos($html, 'Abbott'));
         $this->assertLessThan(strpos($html, 'Zed'), strpos($html, 'deVries'));
 
-        // Zed is in group 4; the others show None.
-        $this->assertMatchesRegularExpression('#Zed</td>\s*<td>Zoe</td>\s*<td>Group 4</td>#', $html);
-        $this->assertMatchesRegularExpression('#Abbott</td>\s*<td>Amy</td>\s*<td>None</td>#', $html);
+        // Phone, then email as a link, then the group number; no group shows None.
+        $this->assertMatchesRegularExpression('#Zed</td>\s*<td>Zoe</td>\s*<td>555-0101</td>\s*<td><a class="cell-email" href="mailto:zoe@example.com"[^>]*>zoe@example.com</a></td>\s*<td>4</td>#', $html);
+        $this->assertMatchesRegularExpression('#Abbott</td>\s*<td>Amy</td>\s*<td></td>\s*<td></td>\s*<td>None</td>#', $html);
     }
 
     public function testGroupListShowsShortTeeTimesAndPlayerNames(): void

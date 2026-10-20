@@ -36,28 +36,35 @@
 <?php if ($rows === []): ?>
     <p class="muted">No <?= esc(strtolower($title)) ?> yet.</p>
 <?php else: ?>
+    <?php $editColumn = $editLinkColumn === null || $actions !== []; ?>
     <div class="table-wrap">
         <table>
             <thead>
             <tr>
                 <?php foreach ($columns as $name): ?>
-                    <th><?= esc($fields[$name]['label']) ?></th>
+                    <th><?= esc($fields[$name]['listLabel'] ?? $fields[$name]['label']) ?></th>
                 <?php endforeach ?>
-                <th></th>
+                <?php if ($editColumn): ?><th></th><?php endif ?>
             </tr>
             </thead>
             <tbody>
             <?php foreach ($rows as $row): ?>
                 <tr>
                     <?php foreach ($columns as $name): ?>
-                        <td><?= esc(field_display($fields[$name], $row[$name] ?? null)) ?></td>
+                        <?php if ($name === $editLinkColumn): ?>
+                            <td><a href="<?= site_url("{$baseRoute}/{$row['id']}/edit") ?>" title="Edit"><?= esc(field_display($fields[$name], $row[$name] ?? null)) ?: 'Edit' ?></a></td>
+                        <?php else: ?>
+                            <td><?= field_cell($fields[$name], $row[$name] ?? null) ?></td>
+                        <?php endif ?>
                     <?php endforeach ?>
-                    <td class="row-actions">
-                        <a href="<?= site_url("{$baseRoute}/{$row['id']}/edit") ?>">Edit</a>
-                        <?php foreach ($actions as $label => $route): ?>
-                            <a href="<?= site_url(str_replace('{id}', (string) $row['id'], $route)) ?>"><?= esc($label) ?></a>
-                        <?php endforeach ?>
-                    </td>
+                    <?php if ($editColumn): ?>
+                        <td class="row-actions">
+                            <a href="<?= site_url("{$baseRoute}/{$row['id']}/edit") ?>">Edit</a>
+                            <?php foreach ($actions as $label => $route): ?>
+                                <a href="<?= site_url(str_replace('{id}', (string) $row['id'], $route)) ?>"><?= esc($label) ?></a>
+                            <?php endforeach ?>
+                        </td>
+                    <?php endif ?>
                 </tr>
             <?php endforeach ?>
             </tbody>

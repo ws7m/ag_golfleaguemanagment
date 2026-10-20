@@ -40,6 +40,22 @@ if (! function_exists('field_display')) {
     }
 }
 
+if (! function_exists('field_cell')) {
+    /**
+     * A stored value as safe HTML for a list page cell. Email addresses become
+     * mailto links; everything else is plain escaped text.
+     */
+    function field_cell(array $field, $value): string
+    {
+        if (($field['type'] ?? '') === 'email' && $value !== null && $value !== '') {
+            return '<a class="cell-email" href="mailto:' . esc((string) $value, 'attr') . '" title="' . esc((string) $value, 'attr') . '">'
+                . esc((string) $value) . '</a>';
+        }
+
+        return esc(field_display($field, $value));
+    }
+}
+
 if (! function_exists('field_input')) {
     /**
      * The HTML input for one field on a form page.

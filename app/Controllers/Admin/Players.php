@@ -11,8 +11,10 @@ class Players extends CrudController
     protected string $title      = 'Players';
     protected string $singular   = 'Player';
     protected string $baseRoute  = 'admin/players';
-    protected array $listColumns = ['login', 'last_name', 'first_name', 'group', 'flight', 'handicap', 'tee', 'winnings', 'is_admin', 'last_login_at', 'active'];
+    protected array $listColumns = ['login', 'last_name', 'first_name', 'phone', 'email', 'group', 'flight', 'handicap', 'tee', 'winnings', 'is_admin', 'last_login_at', 'active'];
     protected array $filters     = ['league_id'];
+    // The login links to the edit page instead of a separate Edit column.
+    protected ?string $editLinkColumn = 'login';
     // Admin-only accounts (not league players) are listed on the Settings page.
     protected array $listWhere   = ['is_player' => 1];
     // By last name, then first name, ignoring capitals. Other sorts are
@@ -55,10 +57,10 @@ class Players extends CrudController
         $byPlayer    = [];
         $firstGroup  = [];
         foreach ($groups->get()->getResultArray() as $group) {
-            $label = 'Group ' . $group['group_number'];
-            if (! isset($filterValues['league_id'])) {
-                $label .= " ({$group['league']})";
-            }
+            // Just the number when one league is shown, to keep the list narrow.
+            $label = isset($filterValues['league_id'])
+                ? (string) $group['group_number']
+                : "{$group['group_number']} ({$group['league']})";
             foreach (LeagueGroupModel::playerIds($group) as $playerId) {
                 $byPlayer[$playerId][] = $label;
                 $firstGroup[$playerId] ??= (int) $group['group_number'];
@@ -95,8 +97,8 @@ class Players extends CrudController
     protected function fields(): array
     {
         return [
-            'first_name'            => ['label' => 'First name', 'required' => true],
-            'last_name'             => ['label' => 'Last name', 'required' => true],
+            'first_name'            => ['label' => 'First name', 'listLabel' => 'First', 'required' => true],
+            'last_name'             => ['label' => 'Last name', 'listLabel' => 'Last', 'required' => true],
             'login'                 => ['label' => 'Login', 'help' => 'Leave blank to set it from the last name and first initial, e.g. Mark Holbrook → holbrm.'],
             'password'              => ['label' => 'Password', 'type' => 'password', 'help' => 'At least 8 characters. Leave blank to keep the current password. A new player left blank starts with their last name in lower case, e.g. holbrook.'],
             'member_number'         => ['label' => 'Member number', 'type' => 'number', 'help' => 'Leave blank to assign a random 3-digit number (100–999).'],
@@ -106,7 +108,7 @@ class Players extends CrudController
             'phone'                 => ['label' => 'Phone'],
             'text_msg_ok'           => ['label' => 'Text messages OK', 'type' => 'checkbox'],
             'tee'                   => ['label' => 'Tee', 'type' => 'select', 'options' => ['blue' => 'Blue', 'white' => 'White', 'red' => 'Red']],
-            'handicap'              => ['label' => 'Handicap', 'type' => 'number', 'compact' => true],
+            'handicap'              => ['label' => 'Handicap', 'listLabel' => 'Hcp', 'type' => 'number', 'compact' => true],
             'flight'                => ['label' => 'Flight', 'type' => 'select', 'options' => [1 => '1', 2 => '2', 3 => '3'], 'compact' => true],
             'desired_tee_time'      => ['label' => 'Desired tee time', 'type' => 'time', 'compact' => true],
             'desired_group_members' => ['label' => 'Desired group members', 'type' => 'textarea'],
@@ -114,7 +116,7 @@ class Players extends CrudController
             'round_winnings'        => ['label' => 'From scored rounds', 'type' => 'money', 'readonly' => true, 'compact' => 'winnings'],
             'is_admin'              => ['label' => 'Admin', 'type' => 'checkbox'],
             'is_player'             => ['label' => 'Plays in the league', 'type' => 'checkbox', 'default' => 1, 'help' => 'Untick for admin-only accounts. They are hidden from player lists and shown under Settings.'],
-            'last_login_at'         => ['label' => 'Last login', 'readonly' => true],
+            'last_login_at'         => ['label' => 'Last login', 'listLabel' => 'Login on', 'readonly' => true],
             'active'                => ['label' => 'Active', 'type' => 'checkbox', 'default' => 1],
         ];
     }

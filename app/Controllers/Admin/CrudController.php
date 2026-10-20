@@ -13,6 +13,7 @@ use CodeIgniter\Model;
  *
  * Each admin screen extends this and describes its fields. Field settings:
  *   label     Text shown next to the input
+ *   listLabel Shorter column heading for the list page
  *   type      text, textarea, email, date, time, number, decimal, money,
  *             select, checkbox, password
  *   required  Shows a required marker (the model does the real validation)
@@ -53,6 +54,12 @@ abstract class CrudController extends BaseController
 
     /** Extra view shown under the list (e.g. the tee time shift form) */
     protected ?string $extraIndexView = null;
+
+    /**
+     * List column whose value links to the edit page. When set (and there are
+     * no other row actions) the separate Edit column is left out, to save width.
+     */
+    protected ?string $editLinkColumn = null;
 
     /** @var array<string, string> Extra buttons at the top of the list: label => link */
     protected array $headActions = [];
@@ -249,6 +256,7 @@ abstract class CrudController extends BaseController
             'columns'   => $this->listColumns,
             'filters'   => $this->filters,
             'actions'   => $this->rowActions(),
+            'editLinkColumn' => $this->editLinkColumn,
             'headActions' => $this->headActions,
             'sortOptions' => $this->sortOptions,
             'sortValue'   => $this->sortChoice(),
