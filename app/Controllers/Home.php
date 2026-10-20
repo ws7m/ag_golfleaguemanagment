@@ -16,7 +16,7 @@ class Home extends BaseController
         $leagueId = Lookup::currentLeagueId();
 
         return view('home', [
-            'title'    => 'Golf League',
+            'title'    => APP_NAME,
             'league'   => $leagueId ? (new LeagueModel())->find($leagueId) : null,
             'settings' => (new SettingModel())->first(),
         ]);

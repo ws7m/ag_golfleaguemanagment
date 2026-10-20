@@ -19,6 +19,7 @@ use CodeIgniter\Model;
  *   options   For select: a Lookup method name (e.g. 'leagues') or id => label
  *   default   Value for a new record; 'currentLeague' uses the current league
  *   help      Hint shown under the input
+ *   readonly  Shown on the form but never saved from it (e.g. last login)
  *   compact   Lay out with neighbouring fields of the same compact group in a
  *             grid (true, or a group name such as 'holes')
  *
@@ -218,6 +219,9 @@ abstract class CrudController extends BaseController
     {
         $data = [];
         foreach ($this->fields() as $name => $field) {
+            if (! empty($field['readonly'])) {
+                continue;
+            }
             $value = $this->request->getPost($name);
             $type  = $field['type'] ?? 'text';
 

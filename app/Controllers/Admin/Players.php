@@ -10,7 +10,7 @@ class Players extends CrudController
     protected string $title      = 'Players';
     protected string $singular   = 'Player';
     protected string $baseRoute  = 'admin/players';
-    protected array $listColumns = ['member_number', 'last_name', 'first_name', 'flight', 'handicap', 'tee', 'is_admin', 'active'];
+    protected array $listColumns = ['member_number', 'last_name', 'first_name', 'flight', 'handicap', 'tee', 'is_admin', 'last_login_at', 'active'];
     protected array $filters     = ['league_id'];
     protected array $orderBy     = ['last_name' => 'ASC', 'first_name' => 'ASC'];
 
@@ -19,7 +19,7 @@ class Players extends CrudController
         return [
             'first_name'            => ['label' => 'First name', 'required' => true],
             'last_name'             => ['label' => 'Last name', 'required' => true],
-            'member_number'         => ['label' => 'Member number', 'type' => 'number', 'help' => 'Leave blank to assign a random 5-digit number.'],
+            'member_number'         => ['label' => 'Member number', 'type' => 'number', 'help' => 'Leave blank to assign a random 3-digit number (100–999).'],
             'league_id'             => ['label' => 'League', 'type' => 'select', 'options' => 'leagues', 'default' => 'currentLeague', 'help' => 'The league the player is registered in.'],
             'gender'                => ['label' => 'Male or female', 'type' => 'select', 'options' => ['M' => 'Male', 'F' => 'Female']],
             'email'                 => ['label' => 'Email', 'type' => 'email'],
@@ -32,6 +32,7 @@ class Players extends CrudController
             'desired_group_members' => ['label' => 'Desired group members', 'type' => 'textarea'],
             'is_admin'              => ['label' => 'Admin', 'type' => 'checkbox'],
             'admin_password'        => ['label' => 'Admin password', 'type' => 'password', 'help' => 'Only for admins. At least 8 characters. Leave blank to keep the current password.'],
+            'last_login_at'         => ['label' => 'Last login', 'readonly' => true],
             'active'                => ['label' => 'Active', 'type' => 'checkbox', 'default' => 1],
         ];
     }

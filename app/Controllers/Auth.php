@@ -37,6 +37,8 @@ class Auth extends BaseController
             return redirect()->back()->withInput()->with('error', 'Email or password is not correct.');
         }
 
+        (new PlayerModel())->recordLogin((int) $admin['id']);
+
         session()->regenerate(true);
         session()->set([
             'admin_id'   => (int) $admin['id'],
@@ -99,6 +101,8 @@ class Auth extends BaseController
         if ($player === null) {
             return redirect()->back()->with('error', 'That member number was not found.');
         }
+
+        (new PlayerModel())->recordLogin((int) $player['id']);
 
         session()->set([
             'player_id'   => (int) $player['id'],

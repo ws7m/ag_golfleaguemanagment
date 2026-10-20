@@ -70,6 +70,13 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->get('admin/leagues')->assertRedirectTo('/admin/login');
     }
 
+    public function testLoggedInAdminWhoNoLongerExistsIsLoggedOut(): void
+    {
+        $this->withSession(['admin_id' => 9999, 'admin_name' => 'Gone'])
+            ->get('admin')
+            ->assertRedirectTo('/admin/login');
+    }
+
     public function testAdminLoginWithCorrectAndWrongPassword(): void
     {
         $this->post('admin/login', ['email' => 'admin@example.com', 'password' => 'wrong-pass'])
@@ -78,6 +85,9 @@ final class AdminScreensTest extends CIUnitTestCase
         $result = $this->post('admin/login', ['email' => 'admin@example.com', 'password' => 'correct-horse']);
         $result->assertRedirectTo('/admin');
         $result->assertSessionHas('admin_id', $this->adminId);
+
+        $admin = (new PlayerModel())->find($this->adminId);
+        $this->assertNotNull($admin['last_login_at'], 'Admin login should record the login date.');
     }
 
     public function testEveryAdminScreenLoads(): void
@@ -203,5 +213,7 @@ final class AdminScreensTest extends CIUnitTestCase
             ->post('login/member', ['member_number' => (string) $player['member_number']]);
         $result->assertRedirectTo('/player');
         $result->assertSessionHas('player_id', (int) $player['id']);
+
+        $this->assertNotNull((new PlayerModel())->find($player['id'])['last_login_at'], 'Player login should record the login date.');
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Filters;
 
+use App\Models\PlayerModel;
 use CodeIgniter\Filters\FilterInterface;
 use CodeIgniter\HTTP\RequestInterface;
 use CodeIgniter\HTTP\ResponseInterface;
@@ -14,7 +15,13 @@ class PlayerAuth implements FilterInterface
 {
     public function before(RequestInterface $request, $arguments = null)
     {
-        if (! session('player_id')) {
+        $playerId = session('player_id');
+        $player   = $playerId ? (new PlayerModel())->find($playerId) : null;
+
+        // Also covers a player deleted or made inactive since logging in.
+        if ($player === null || ! $player['active']) {
+            session()->remove(['player_id', 'player_name']);
+
             return redirect()->to('login');
         }
     }

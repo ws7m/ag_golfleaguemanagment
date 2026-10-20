@@ -78,7 +78,7 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
 - As admin, I want to be able to create/update/delete players
 - As player, I want to be able to update my demographic information
   - Id
-  - Member number - Unique, random, non-sequential 5-digit number the player enters to log in (see 2.10)
+  - Member number - Unique, random, non-sequential 3-digit number (100–999) the player enters to log in (see 2.10)
   - League Id - Set to league when player pays and registers
   - First name
   - Last name
@@ -93,6 +93,7 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
   - Desired group members - CSV names
   - IsAdmin
   - Admin password - Hashed; only for admins (see 2.10)
+  - Last login - Date and time the player (or admin) last logged in; set automatically
   - Active
 
 ### 2.5 Groups
@@ -173,7 +174,7 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
   - Shared password - Hashed
   - Admin contact name
   - Admin contact email
-- **Player login:** all players log in with the one shared login ID and password, then enter their Member number to identify themselves. This keeps login simple: players have no individual passwords to forget. Anyone who has the shared password and knows another player's Member number can act as that player, which is why Member numbers are random rather than sequential.
+- **Player login:** all players log in with the one shared login ID and password, then enter their Member number to identify themselves. This keeps login simple: players have no individual passwords to forget. Anyone who has the shared password and knows another player's Member number can act as that player, which is why Member numbers are random rather than sequential. Member numbers are 3 digits so they are easy to remember; because that makes them easier to guess, wrong Member number attempts are limited per visitor IP.
 - **Admin login:** admins log in with their own email and Admin password.
 
 ### 2.11 Deleting records

@@ -1,5 +1,5 @@
-# ag_golfleaguemanagment
-Home built golf league management
+# AG Golf League Management
+Home built golf league management (repository: ag_golfleaguemanagment)
 
 See [design.md](design.md) for the design.
 

@@ -1,6 +1,6 @@
 <?= $this->extend('layouts/main') ?>
 <?= $this->section('content') ?>
-<h1><?= esc($league['name'] ?? 'Golf League') ?></h1>
+<h1><?= esc($league['name'] ?? APP_NAME) ?></h1>
 
 <?php if (! empty($league['description'])): ?>
     <p><?= nl2br(esc($league['description'])) ?></p>

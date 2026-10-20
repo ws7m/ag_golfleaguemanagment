@@ -13,7 +13,7 @@ class CreatePlayers extends Migration
     {
         $this->forge->addField([
             'id'                    => ['type' => 'INTEGER', 'unsigned' => true, 'auto_increment' => true],
-            // Random, non-sequential 5-digit number the player enters to log in.
+            // Random, non-sequential 3-digit number (100-999) the player enters to log in.
             'member_number'         => ['type' => 'INTEGER'],
             // Set to the current league when the player pays and registers.
             'league_id'             => ['type' => 'INTEGER', 'unsigned' => true, 'null' => true],

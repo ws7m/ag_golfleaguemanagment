@@ -31,14 +31,14 @@ final class Phase1SchemaTest extends CIUnitTestCase
         }
     }
 
-    public function testNewPlayerGetsUniqueFiveDigitMemberNumber(): void
+    public function testNewPlayerGetsUniqueThreeDigitMemberNumber(): void
     {
         $players = new PlayerModel();
         $a       = $players->find($players->insert(['first_name' => 'Ann', 'last_name' => 'A']));
         $b       = $players->find($players->insert(['first_name' => 'Bob', 'last_name' => 'B']));
 
-        $this->assertGreaterThanOrEqual(10000, (int) $a['member_number']);
-        $this->assertLessThanOrEqual(99999, (int) $a['member_number']);
+        $this->assertGreaterThanOrEqual(100, (int) $a['member_number']);
+        $this->assertLessThanOrEqual(999, (int) $a['member_number']);
         $this->assertNotSame($a['member_number'], $b['member_number']);
     }
 

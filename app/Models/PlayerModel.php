@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use CodeIgniter\Model;
+use RuntimeException;
 
 class PlayerModel extends Model
 {
@@ -13,11 +14,11 @@ class PlayerModel extends Model
     protected $allowedFields = [
         'member_number', 'league_id', 'first_name', 'last_name', 'gender', 'email', 'phone',
         'text_msg_ok', 'tee', 'handicap', 'flight', 'desired_tee_time', 'desired_group_members',
-        'is_admin', 'admin_password_hash', 'active',
+        'is_admin', 'admin_password_hash', 'last_login_at', 'active',
     ];
 
     protected $validationRules = [
-        'member_number'    => 'permit_empty|integer|greater_than_equal_to[10000]|less_than_equal_to[99999]|is_unique[players.member_number,id,{id}]',
+        'member_number'    => 'permit_empty|integer|greater_than_equal_to[100]|less_than_equal_to[999]|is_unique[players.member_number,id,{id}]',
         'league_id'        => 'permit_empty|is_natural_no_zero',
         'first_name'       => 'required|max_length[50]',
         'last_name'        => 'required|max_length[50]',
@@ -38,16 +39,26 @@ class PlayerModel extends Model
     // Never send the admin password hash out with player data by accident.
     protected $afterFind = ['hidePasswordHash'];
 
+    // Member numbers are 3 digits so they are easy to remember.
+    public const MEMBER_NUMBER_MIN = 100;
+    public const MEMBER_NUMBER_MAX = 999;
+
     /**
-     * Returns a random 5-digit member number that no player has yet.
+     * Returns a random 3-digit member number that no player has yet.
      */
     public function generateMemberNumber(): int
     {
-        do {
-            $number = random_int(10000, 99999);
-        } while ($this->builder()->where('member_number', $number)->countAllResults() > 0);
+        $used = array_map('intval', array_column(
+            $this->builder()->select('member_number')->get()->getResultArray(),
+            'member_number'
+        ));
+        $free = array_values(array_diff(range(self::MEMBER_NUMBER_MIN, self::MEMBER_NUMBER_MAX), $used));
 
-        return $number;
+        if ($free === []) {
+            throw new RuntimeException('All 900 member numbers (100-999) are in use.');
+        }
+
+        return $free[random_int(0, count($free) - 1)];
     }
 
     /**
@@ -71,6 +82,16 @@ class PlayerModel extends Model
         unset($row['admin_password_hash']);
 
         return $row;
+    }
+
+    /**
+     * Records that a player (or admin) has just logged in.
+     */
+    public function recordLogin(int $playerId): void
+    {
+        $this->builder()
+            ->where('id', $playerId)
+            ->update(['last_login_at' => date('Y-m-d H:i:s')]);
     }
 
     /**

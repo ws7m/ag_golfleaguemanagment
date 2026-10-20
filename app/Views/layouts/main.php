@@ -3,12 +3,12 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= esc($title ?? 'Golf League') ?> · Golf League</title>
+    <title><?= isset($title) && $title !== APP_NAME ? esc($title) . ' · ' : '' ?><?= esc(APP_NAME) ?></title>
     <link rel="stylesheet" href="<?= base_url('css/app.css') ?>">
 </head>
 <body>
 <header class="site-header">
-    <a class="brand" href="<?= site_url(session('admin_id') ? 'admin' : '/') ?>">Golf League</a>
+    <a class="brand" href="<?= site_url(session('admin_id') ? 'admin' : '/') ?>"><?= esc(APP_NAME) ?></a>
     <?php if (session('admin_id')): ?>
         <nav class="nav">
             <a href="<?= site_url('admin/leagues') ?>">Leagues</a>

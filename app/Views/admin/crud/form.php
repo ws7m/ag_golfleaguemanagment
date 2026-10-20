@@ -18,7 +18,11 @@
 
         <div class="field<?= ($field['type'] ?? '') === 'checkbox' ? ' field-check' : '' ?><?= isset($errors[$name]) ? ' has-error' : '' ?>">
             <label for="f_<?= esc($name, 'attr') ?>"><?= esc($field['label']) ?><?= ! empty($field['required']) ? ' *' : '' ?></label>
-            <?= field_input($name, $field, $record[$name] ?? null) ?>
+            <?php if (! empty($field['readonly'])): ?>
+                <p class="readonly" id="f_<?= esc($name, 'attr') ?>"><?= esc(field_display($field, $record[$name] ?? null)) ?: '—' ?></p>
+            <?php else: ?>
+                <?= field_input($name, $field, $record[$name] ?? null) ?>
+            <?php endif ?>
             <?php if (isset($errors[$name])): ?><small class="error"><?= esc($errors[$name]) ?></small><?php endif ?>
             <?php if (! empty($field['help'])): ?><small class="help"><?= esc($field['help']) ?></small><?php endif ?>
         </div>
