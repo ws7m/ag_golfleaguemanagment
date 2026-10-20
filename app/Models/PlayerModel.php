@@ -69,6 +69,15 @@ class PlayerModel extends Model
     }
 
     /**
+     * The password a new player starts with: their last name in lower case,
+     * e.g. "holbrook". The admin can change it on the player edit screen.
+     */
+    public static function defaultPassword(string $lastName): string
+    {
+        return strtolower(trim($lastName));
+    }
+
+    /**
      * A login for this name that no other player has: the default login, or
      * the default with 2, 3, ... added if it is taken.
      */
@@ -162,6 +171,11 @@ class PlayerModel extends Model
         $row['login'] = empty($row['login'])
             ? $this->generateLogin((string) ($row['first_name'] ?? ''), (string) ($row['last_name'] ?? ''))
             : strtolower(trim($row['login']));
+
+        // New players start with their last name as their password.
+        if (empty($row['password_hash'])) {
+            $row['password_hash'] = password_hash(self::defaultPassword((string) ($row['last_name'] ?? '')), PASSWORD_DEFAULT);
+        }
 
         return $data;
     }

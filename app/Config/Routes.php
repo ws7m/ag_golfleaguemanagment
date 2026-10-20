@@ -46,6 +46,8 @@ $routes->group('admin', ['filter' => 'adminauth', 'namespace' => 'App\Controller
     $routes->get('courses/(:num)/holes', 'Holes::edit/$1');
     $routes->post('courses/(:num)/holes', 'Holes::update/$1');
     $routes->post('tee-times/shift', 'TeeTimes::shift');
+    $routes->post('tee-times/generate', 'TeeTimes::generate');
+    $routes->post('tee-times/delete-all', 'TeeTimes::deleteAll');
     $routes->get('settings', 'Settings::edit');
     $routes->post('settings', 'Settings::update');
 });

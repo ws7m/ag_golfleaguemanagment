@@ -132,6 +132,8 @@ input[type="checkbox"] { width: 1.2rem; height: 1.2rem; }
 .panel { margin-top: 2rem; padding: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
 .panel h2 { margin-top: 0; }
 .panel-danger { border-color: var(--danger); }
+.panel-pair { display: grid; gap: 0 1rem; }
+@media (min-width: 760px) { .panel-pair { grid-template-columns: 1fr 1fr; } }
 
 /* Tables */
 .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }

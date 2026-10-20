@@ -360,6 +360,74 @@ final class AdminScreensTest extends CIUnitTestCase
         $result->assertDontSee('Group 3 (Monday League)');
     }
 
+    public function testNewPlayerStartsWithLastNameAsPassword(): void
+    {
+        $this->asAdmin()->post('admin/players', ['first_name' => 'Tim', 'last_name' => 'Annable', 'active' => '1', 'is_player' => '1'])
+            ->assertRedirectTo('/admin/players');
+
+        $players = new PlayerModel();
+        $this->assertNotNull($players->verifyLogin('annabt', 'annable'));
+
+        // A password typed in when adding the player is used instead.
+        $this->asAdmin()->post('admin/players', [
+            'first_name' => 'Jo', 'last_name' => 'Golfer', 'password' => 'fairway-27', 'active' => '1', 'is_player' => '1',
+        ]);
+        $this->assertNotNull($players->verifyLogin('golfej', 'fairway-27'));
+        $this->assertNull($players->verifyLogin('golfej', 'golfer'));
+    }
+
+    public function testCreateFrontAndBackNineTeeTimes(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
+        $courseId = (new CourseModel())->insert(['name' => 'Course']);
+        (new TeeTimeModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'front', 'tee_time' => '16:10']);
+
+        $this->asAdmin()->post('admin/tee-times/generate', [
+            'league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'front', 'start' => '16:00', 'increment' => '10', 'count' => '4',
+        ])->assertSessionHas('message', '3 front nine tee times created. 1 skipped because they already exist.');
+
+        $this->asAdmin()->post('admin/tee-times/generate', [
+            'league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'back', 'start' => '16:02', 'increment' => '8', 'count' => '3',
+        ])->assertSessionHas('message', '3 back nine tee times created.');
+
+        $times = static fn (string $nine) => array_column(
+            (new TeeTimeModel())->where('league_id', $leagueId)->where('nine', $nine)->orderBy('tee_time')->findAll(),
+            'tee_time'
+        );
+        $this->assertSame(['16:00', '16:10', '16:20', '16:30'], $times('front'));
+        $this->assertSame(['16:02', '16:10', '16:18'], $times('back'));
+
+        // Running past midnight creates nothing.
+        $this->asAdmin()->post('admin/tee-times/generate', [
+            'league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'back', 'start' => '23:50', 'increment' => '10', 'count' => '3',
+        ])->assertSessionHas('error');
+        $this->assertCount(3, $times('back'));
+
+        // The list doesn't repeat the league chosen at the top.
+        $this->asAdmin()->get("admin/tee-times?league_id={$leagueId}")->assertDontSee('<th>League</th>');
+    }
+
+    public function testDeleteAllTeeTimesClearsThemFromGroups(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
+        $otherId  = (new LeagueModel())->insert(['name' => 'Other']);
+        $courseId = (new CourseModel())->insert(['name' => 'Course']);
+        $teeTimes = new TeeTimeModel();
+        $front    = $teeTimes->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'front', 'tee_time' => '16:00']);
+        $teeTimes->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'back', 'tee_time' => '16:02']);
+        $other = $teeTimes->insert(['league_id' => $otherId, 'course_id' => $courseId, 'nine' => 'front', 'tee_time' => '16:00']);
+        $db    = db_connect();
+        $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 1, 'front_tee_time_id' => $front, 'active' => 1]);
+        $groupId = $db->insertID();
+
+        $this->asAdmin()->post('admin/tee-times/delete-all', ['league_id' => $leagueId])
+            ->assertSessionHas('message', '2 tee times deleted. Groups that used them need their tee times set again.');
+
+        $this->assertSame(0, (new TeeTimeModel())->where('league_id', $leagueId)->countAllResults());
+        $this->seeInDatabase('tee_times', ['id' => $other]);
+        $this->seeInDatabase('league_groups', ['id' => $groupId, 'front_tee_time_id' => null]);
+    }
+
     public function testAdminCannotRemoveOwnAdminAccess(): void
     {
         $result = $this->asAdmin()->post("admin/players/{$this->adminId}", [
