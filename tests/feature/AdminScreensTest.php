@@ -428,6 +428,24 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->seeInDatabase('league_groups', ['id' => $groupId, 'front_tee_time_id' => null]);
     }
 
+    public function testTeeTimeListShowsAssignedGroup(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
+        $courseId = (new CourseModel())->insert(['name' => 'Course']);
+        $teeTimes = new TeeTimeModel();
+        $front    = $teeTimes->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'front', 'tee_time' => '16:00']);
+        $back     = $teeTimes->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'back', 'tee_time' => '16:02']);
+        $teeTimes->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'front', 'tee_time' => '16:10']);
+        db_connect()->table('league_groups')->insert([
+            'league_id' => $leagueId, 'group_number' => 5, 'front_tee_time_id' => $front, 'back_tee_time_id' => $back, 'active' => 1,
+        ]);
+
+        $html = $this->asAdmin()->get("admin/tee-times?league_id={$leagueId}")->getBody();
+        $this->assertMatchesRegularExpression('#<td>Front</td>\s*<td>Group 5</td>\s*<td>16:00</td>#', $html);
+        $this->assertMatchesRegularExpression('#<td>Back</td>\s*<td>Group 5</td>\s*<td>16:02</td>#', $html);
+        $this->assertMatchesRegularExpression('#<td>Front</td>\s*<td>None</td>\s*<td>16:10</td>#', $html);
+    }
+
     public function testAdminCannotRemoveOwnAdminAccess(): void
     {
         $result = $this->asAdmin()->post("admin/players/{$this->adminId}", [

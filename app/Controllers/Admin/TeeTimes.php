@@ -11,11 +11,44 @@ class TeeTimes extends CrudController
     protected string $singular       = 'Tee time';
     protected string $baseRoute      = 'admin/tee-times';
     // No league column: the list is filtered by league at the top.
-    protected array $listColumns     = ['course_id', 'nine', 'tee_time'];
+    protected array $listColumns     = ['course_id', 'nine', 'group', 'tee_time'];
     protected array $filters         = ['league_id'];
     protected array $orderBy         = ['nine' => 'DESC', 'tee_time' => 'ASC'];
     protected ?string $extraIndexView = 'admin/tee_times/tools';
     protected array $headActions      = ['Create tee times' => '#create', 'Delete all tee times' => '#delete-tee-times'];
+
+    protected function listFields(): array
+    {
+        return ['group' => ['label' => 'Group']];
+    }
+
+    /**
+     * Adds the group(s) assigned to each tee time, or "None".
+     * Only active groups count.
+     */
+    protected function listRows(array $rows, array $filterValues): array
+    {
+        $groups = db_connect()->table('league_groups')
+            ->select('group_number, front_tee_time_id, back_tee_time_id')
+            ->where('active', 1)
+            ->orderBy('group_number')
+            ->get()->getResultArray();
+
+        $byTeeTime = [];
+        foreach ($groups as $group) {
+            foreach (['front_tee_time_id', 'back_tee_time_id'] as $column) {
+                if (! empty($group[$column])) {
+                    $byTeeTime[(int) $group[$column]][] = 'Group ' . $group['group_number'];
+                }
+            }
+        }
+
+        foreach ($rows as &$row) {
+            $row['group'] = implode(', ', $byTeeTime[(int) $row['id']] ?? ['None']);
+        }
+
+        return $rows;
+    }
 
     protected function fields(): array
     {
