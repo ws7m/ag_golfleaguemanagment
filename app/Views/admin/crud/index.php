@@ -2,7 +2,12 @@
 <?= $this->section('content') ?>
 <div class="page-head">
     <h1><?= esc($title) ?></h1>
+    <span class="head-actions">
+    <?php foreach ($headActions as $label => $link): ?>
+        <a class="button button-secondary" href="<?= str_starts_with($link, '#') ? esc($link, 'attr') : site_url($link) ?>"><?= esc($label) ?></a>
+    <?php endforeach ?>
     <a class="button" href="<?= site_url($baseRoute . '/new' . (isset($filterValues['round_id']) ? '?round_id=' . $filterValues['round_id'] : '')) ?>">Add <?= esc(strtolower($singular)) ?></a>
+    </span>
 </div>
 
 <?php if ($filters !== []): ?>

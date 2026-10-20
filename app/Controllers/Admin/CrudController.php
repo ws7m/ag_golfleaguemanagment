@@ -51,6 +51,9 @@ abstract class CrudController extends BaseController
     /** Extra view shown under the list (e.g. the tee time shift form) */
     protected ?string $extraIndexView = null;
 
+    /** @var array<string, string> Extra buttons at the top of the list: label => link */
+    protected array $headActions = [];
+
     /**
      * @return array<string, array<string, mixed>>
      */
@@ -224,6 +227,7 @@ abstract class CrudController extends BaseController
             'columns'   => $this->listColumns,
             'filters'   => $this->filters,
             'actions'   => $this->rowActions(),
+            'headActions' => $this->headActions,
         ];
     }
 

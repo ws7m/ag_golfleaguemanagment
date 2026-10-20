@@ -44,6 +44,7 @@ $routes->group('admin', ['filter' => 'adminauth', 'namespace' => 'App\Controller
     }
 
     $routes->get('leagues/(:num)/copy', 'Leagues::copy/$1');
+    $routes->post('rounds/generate', 'Rounds::generate');
     $routes->get('courses/(:num)/holes', 'Holes::edit/$1');
     $routes->post('courses/(:num)/holes', 'Holes::update/$1');
     $routes->post('tee-times/shift', 'TeeTimes::shift');

@@ -235,6 +235,37 @@ final class AdminScreensTest extends CIUnitTestCase
         $form->assertSee('Williams, Jordan');
     }
 
+    public function testGenerateWeeklyRoundsToLeagueEndDate(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League', 'start_date' => '2027-05-03', 'end_date' => '2027-05-31']);
+        $courseId = (new CourseModel())->insert(['name' => 'Course']);
+        // An existing round on week 2's date is kept and that week is skipped.
+        (new RoundModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-05-10', 'name' => 'Opening night']);
+
+        $result = $this->asAdmin()->post('admin/rounds/generate', ['league_id' => $leagueId, 'course_id' => $courseId]);
+        $result->assertSessionHas('message', '4 rounds created. 1 skipped because a round already exists on that date.');
+
+        $rounds = (new RoundModel())->where('league_id', $leagueId)->orderBy('round_date')->findAll();
+        $this->assertSame(
+            ['2027-05-03', '2027-05-10', '2027-05-17', '2027-05-24', '2027-05-31'],
+            array_column($rounds, 'round_date')
+        );
+        $this->assertSame(['Round 1', 'Opening night', 'Round 3', 'Round 4', 'Round 5'], array_column($rounds, 'name'));
+    }
+
+    public function testGenerateRoundsByCountAndRequiresStartDate(): void
+    {
+        $courseId = (new CourseModel())->insert(['name' => 'Course']);
+        $noStart  = (new LeagueModel())->insert(['name' => 'No dates']);
+        $this->asAdmin()->post('admin/rounds/generate', ['league_id' => $noStart, 'course_id' => $courseId])
+            ->assertSessionHas('error');
+
+        $leagueId = (new LeagueModel())->insert(['name' => 'League', 'start_date' => '2027-05-03']);
+        $this->asAdmin()->post('admin/rounds/generate', ['league_id' => $leagueId, 'course_id' => $courseId, 'count' => '3'])
+            ->assertSessionHas('message', '3 rounds created.');
+        $this->seeInDatabase('rounds', ['league_id' => $leagueId, 'name' => 'Round 3', 'round_date' => '2027-05-17', 'status' => 'scheduled']);
+    }
+
     public function testAdminCannotRemoveOwnAdminAccess(): void
     {
         $result = $this->asAdmin()->post("admin/players/{$this->adminId}", [
