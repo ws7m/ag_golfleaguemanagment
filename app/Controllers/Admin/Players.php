@@ -35,8 +35,9 @@ class Players extends CrudController
      * total winnings, then applies the chosen sort.
      *
      * Only active groups count. With the list showing a single league, only
-     * that league's groups and winnings are used; with all leagues, group
-     * names include the league and winnings are totalled across leagues.
+     * that league's groups and round winnings are used; with all leagues,
+     * group names include the league and round winnings are totalled across
+     * leagues. Winnings entered on the player are always added.
      */
     protected function listRows(array $rows, array $filterValues): array
     {
@@ -62,18 +63,13 @@ class Players extends CrudController
             }
         }
 
-        $winnings = db_connect()->table('scores')
-            ->select('player_id, SUM(winnings_cents) AS total')
-            ->groupBy('player_id');
-        if (isset($filterValues['league_id'])) {
-            $winnings->where('league_id', $filterValues['league_id']);
-        }
-        $winnings = array_column($winnings->get()->getResultArray(), 'total', 'player_id');
+        $winnings = $this->roundWinnings($filterValues['league_id'] ?? null);
 
         foreach ($rows as &$row) {
             $id                = (int) $row['id'];
             $row['group']      = isset($byPlayer[$id]) ? implode(', ', $byPlayer[$id]) : 'None';
-            $row['winnings']   = (int) ($winnings[$id] ?? 0);
+            // Scored rounds plus winnings the admin entered on the player.
+            $row['winnings']   = ($winnings[$id] ?? 0) + (int) ($row['winnings_cents'] ?? 0);
             $row['_group_num'] = $firstGroup[$id] ?? PHP_INT_MAX; // No group sorts last
             // Date only (e.g. "Oct 19") to keep the list narrow; the edit form shows the time.
             if (! empty($row['last_login_at'])) {
@@ -110,11 +106,37 @@ class Players extends CrudController
             'flight'                => ['label' => 'Flight', 'type' => 'select', 'options' => [1 => '1', 2 => '2', 3 => '3'], 'compact' => true],
             'desired_tee_time'      => ['label' => 'Desired tee time', 'type' => 'time', 'compact' => true],
             'desired_group_members' => ['label' => 'Desired group members', 'type' => 'textarea'],
+            'winnings_cents'        => ['label' => 'Winnings', 'type' => 'money', 'compact' => 'winnings', 'help' => 'Entered by you. Added to winnings from scored rounds.'],
+            'round_winnings'        => ['label' => 'From scored rounds', 'type' => 'money', 'readonly' => true, 'compact' => 'winnings'],
             'is_admin'              => ['label' => 'Admin', 'type' => 'checkbox'],
             'admin_password'        => ['label' => 'Admin password', 'type' => 'password', 'help' => 'Only for admins. At least 8 characters. Leave blank to keep the current password.'],
             'last_login_at'         => ['label' => 'Last login', 'readonly' => true],
             'active'                => ['label' => 'Active', 'type' => 'checkbox', 'default' => 1],
         ];
+    }
+
+    protected function formRecord(array $record, ?int $id): array
+    {
+        $record['round_winnings'] = $id === null ? 0 : $this->roundWinnings()[$id] ?? 0;
+
+        return $record;
+    }
+
+    /**
+     * Total winnings from scored rounds per player id, optionally for one league.
+     *
+     * @return array<int, int>
+     */
+    private function roundWinnings(?string $leagueId = null): array
+    {
+        $query = db_connect()->table('scores')
+            ->select('player_id, SUM(winnings_cents) AS total')
+            ->groupBy('player_id');
+        if ($leagueId !== null) {
+            $query->where('league_id', $leagueId);
+        }
+
+        return array_map('intval', array_column($query->get()->getResultArray(), 'total', 'player_id'));
     }
 
     protected function checkBeforeSave(array $data, ?int $id): ?string

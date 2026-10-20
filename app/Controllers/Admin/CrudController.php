@@ -215,11 +215,20 @@ abstract class CrudController extends BaseController
         return $row;
     }
 
+    /**
+     * Adds values for read-only fields that are worked out rather than
+     * stored, before the add/edit form is shown.
+     */
+    protected function formRecord(array $record, ?int $id): array
+    {
+        return $record;
+    }
+
     protected function form(array $record, ?int $id, array $errors = []): string
     {
         return view('admin/crud/form', $this->viewData([
             'fields' => $this->resolvedFields(),
-            'record' => $record,
+            'record' => $this->formRecord($record, $id),
             'id'     => $id,
             'errors' => $errors,
         ]));

@@ -318,6 +318,29 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->asAdmin()->get("admin/players?league_id={$leagueId}")->assertSee('$25.50');
     }
 
+    public function testAdminCanSetPlayerWinningsAddedToRoundWinnings(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
+        $courseId = (new CourseModel())->insert(['name' => 'Course']);
+        $roundId  = (new RoundModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-05-03']);
+        $playerId = (int) (new PlayerModel())->insert(['first_name' => 'Jo', 'last_name' => 'Golfer', 'league_id' => $leagueId]);
+        db_connect()->table('scores')->insert(['league_id' => $leagueId, 'player_id' => $playerId, 'round_id' => $roundId, 'winnings_cents' => 500]);
+
+        $this->asAdmin()->get("admin/players/{$playerId}/edit")->assertSee('$5.00');
+
+        $result = $this->asAdmin()->post("admin/players/{$playerId}", [
+            'first_name' => 'Jo', 'last_name' => 'Golfer', 'league_id' => (string) $leagueId,
+            'winnings_cents' => '12.50', 'active' => '1',
+        ]);
+        $result->assertRedirectTo('/admin/players');
+        $this->seeInDatabase('players', ['id' => $playerId, 'winnings_cents' => 1250]);
+        // The member number was left blank on the form, so a new one was assigned.
+        $this->assertNotEmpty((new PlayerModel())->find($playerId)['member_number']);
+
+        // The list total is $12.50 entered + $5.00 from rounds.
+        $this->asAdmin()->get("admin/players?league_id={$leagueId}")->assertSee('$17.50');
+    }
+
     public function testAdminCannotRemoveOwnAdminAccess(): void
     {
         $result = $this->asAdmin()->post("admin/players/{$this->adminId}", [

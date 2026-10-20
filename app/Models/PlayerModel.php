@@ -14,7 +14,7 @@ class PlayerModel extends Model
     protected $allowedFields = [
         'member_number', 'league_id', 'first_name', 'last_name', 'gender', 'email', 'phone',
         'text_msg_ok', 'tee', 'handicap', 'flight', 'desired_tee_time', 'desired_group_members',
-        'is_admin', 'admin_password_hash', 'last_login_at', 'active',
+        'is_admin', 'admin_password_hash', 'last_login_at', 'winnings_cents', 'active',
     ];
 
     protected $validationRules = [
@@ -32,11 +32,14 @@ class PlayerModel extends Model
         'flight'           => 'permit_empty|in_list[1,2,3]',
         'desired_tee_time' => ['permit_empty', 'regex_match[/^([01][0-9]|2[0-3]):[0-5][0-9]$/]'],
         'is_admin'         => 'permit_empty|in_list[0,1]',
+        'winnings_cents'   => 'permit_empty|is_natural',
         'active'           => 'permit_empty|in_list[0,1]',
     ];
 
-    // Give every new player a member number if one wasn't supplied.
+    // Give every new player a member number if one wasn't supplied, and a new
+    // one if it is cleared when editing.
     protected $beforeInsert = ['assignMemberNumber'];
+    protected $beforeUpdate = ['assignClearedMemberNumber'];
 
     // Never send the admin password hash out with player data by accident.
     protected $afterFind = ['hidePasswordHash'];
@@ -109,6 +112,15 @@ class PlayerModel extends Model
     protected function assignMemberNumber(array $data): array
     {
         if (empty($data['data']['member_number'])) {
+            $data['data']['member_number'] = $this->generateMemberNumber();
+        }
+
+        return $data;
+    }
+
+    protected function assignClearedMemberNumber(array $data): array
+    {
+        if (array_key_exists('member_number', $data['data']) && empty($data['data']['member_number'])) {
             $data['data']['member_number'] = $this->generateMemberNumber();
         }
 
