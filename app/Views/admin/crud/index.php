@@ -10,7 +10,7 @@
     </span>
 </div>
 
-<?php if ($filters !== []): ?>
+<?php if ($filters !== [] || $sortOptions !== []): ?>
     <form method="get" action="<?= site_url($baseRoute) ?>" class="filters">
         <?php foreach ($filters as $name): ?>
             <label for="filter_<?= esc($name, 'attr') ?>"><?= esc($fields[$name]['label']) ?></label>
@@ -21,6 +21,14 @@
                 <?php endforeach ?>
             </select>
         <?php endforeach ?>
+        <?php if ($sortOptions !== []): ?>
+            <label for="sort">Sort by</label>
+            <select id="sort" name="sort" onchange="this.form.submit()">
+                <?php foreach ($sortOptions as $key => $label): ?>
+                    <option value="<?= esc($key, 'attr') ?>" <?= $sortValue === $key ? 'selected' : '' ?>><?= esc($label) ?></option>
+                <?php endforeach ?>
+            </select>
+        <?php endif ?>
         <noscript><button type="submit">Filter</button></noscript>
     </form>
 <?php endif ?>

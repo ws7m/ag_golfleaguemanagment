@@ -55,6 +55,13 @@ abstract class CrudController extends BaseController
     protected array $headActions = [];
 
     /**
+     * @var array<string, string> Sort choices for the list: key => label. The
+     *      first is the default. The screen applies the sort in listRows(),
+     *      reading the choice with sortChoice().
+     */
+    protected array $sortOptions = [];
+
+    /**
      * @return array<string, array<string, mixed>>
      */
     abstract protected function fields(): array;
@@ -228,7 +235,22 @@ abstract class CrudController extends BaseController
             'filters'   => $this->filters,
             'actions'   => $this->rowActions(),
             'headActions' => $this->headActions,
+            'sortOptions' => $this->sortOptions,
+            'sortValue'   => $this->sortChoice(),
         ];
+    }
+
+    /**
+     * The sort chosen on the list page, or the first of $sortOptions.
+     */
+    protected function sortChoice(): ?string
+    {
+        if ($this->sortOptions === []) {
+            return null;
+        }
+        $sort = (string) $this->request->getGet('sort');
+
+        return array_key_exists($sort, $this->sortOptions) ? $sort : array_key_first($this->sortOptions);
     }
 
     /**

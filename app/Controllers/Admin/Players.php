@@ -11,20 +11,32 @@ class Players extends CrudController
     protected string $title      = 'Players';
     protected string $singular   = 'Player';
     protected string $baseRoute  = 'admin/players';
-    protected array $listColumns = ['member_number', 'last_name', 'first_name', 'group', 'flight', 'handicap', 'tee', 'is_admin', 'last_login_at', 'active'];
+    protected array $listColumns = ['member_number', 'last_name', 'first_name', 'group', 'flight', 'handicap', 'tee', 'winnings', 'is_admin', 'last_login_at', 'active'];
     protected array $filters     = ['league_id'];
-    // By last name, then first name, ignoring capitals.
-    protected array $orderBy = ['LOWER(last_name)' => 'ASC', 'LOWER(first_name)' => 'ASC'];
+    // By last name, then first name, ignoring capitals. Other sorts are
+    // applied in listRows().
+    protected array $orderBy     = ['LOWER(last_name)' => 'ASC', 'LOWER(first_name)' => 'ASC'];
+    protected array $sortOptions = [
+        'name'     => 'Last name',
+        'group'    => 'Group',
+        'winnings' => 'Winnings (most first)',
+    ];
 
     protected function listFields(): array
     {
-        return ['group' => ['label' => 'Group']];
+        return [
+            'group'    => ['label' => 'Group'],
+            'winnings' => ['label' => 'Winnings', 'type' => 'money'],
+        ];
     }
 
     /**
-     * Adds the group each player is on the roster of, or "None".
+     * Adds the group each player is on the roster of (or "None") and their
+     * total winnings, then applies the chosen sort.
+     *
      * Only active groups count. With the list showing a single league, only
-     * that league's groups are used; with all leagues, the league is named.
+     * that league's groups and winnings are used; with all leagues, group
+     * names include the league and winnings are totalled across leagues.
      */
     protected function listRows(array $rows, array $filterValues): array
     {
@@ -37,7 +49,8 @@ class Players extends CrudController
             $groups->where('g.league_id', $filterValues['league_id']);
         }
 
-        $byPlayer = [];
+        $byPlayer    = [];
+        $firstGroup  = [];
         foreach ($groups->get()->getResultArray() as $group) {
             $label = 'Group ' . $group['group_number'];
             if (! isset($filterValues['league_id'])) {
@@ -45,11 +58,37 @@ class Players extends CrudController
             }
             foreach (LeagueGroupModel::playerIds($group) as $playerId) {
                 $byPlayer[$playerId][] = $label;
+                $firstGroup[$playerId] ??= (int) $group['group_number'];
             }
         }
 
+        $winnings = db_connect()->table('scores')
+            ->select('player_id, SUM(winnings_cents) AS total')
+            ->groupBy('player_id');
+        if (isset($filterValues['league_id'])) {
+            $winnings->where('league_id', $filterValues['league_id']);
+        }
+        $winnings = array_column($winnings->get()->getResultArray(), 'total', 'player_id');
+
         foreach ($rows as &$row) {
-            $row['group'] = isset($byPlayer[(int) $row['id']]) ? implode(', ', $byPlayer[(int) $row['id']]) : 'None';
+            $id                = (int) $row['id'];
+            $row['group']      = isset($byPlayer[$id]) ? implode(', ', $byPlayer[$id]) : 'None';
+            $row['winnings']   = (int) ($winnings[$id] ?? 0);
+            $row['_group_num'] = $firstGroup[$id] ?? PHP_INT_MAX; // No group sorts last
+            // Date only (e.g. "Oct 19") to keep the list narrow; the edit form shows the time.
+            if (! empty($row['last_login_at'])) {
+                $row['last_login_at'] = date('M j', strtotime($row['last_login_at']));
+            }
+        }
+        unset($row);
+
+        // Rows arrive sorted by name, so a stable sort keeps names in order
+        // within each group or winnings amount.
+        $sort = $this->sortChoice();
+        if ($sort === 'group') {
+            usort($rows, static fn ($a, $b) => $a['_group_num'] <=> $b['_group_num']);
+        } elseif ($sort === 'winnings') {
+            usort($rows, static fn ($a, $b) => $b['winnings'] <=> $a['winnings']);
         }
 
         return $rows;

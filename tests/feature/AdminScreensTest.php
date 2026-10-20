@@ -287,6 +287,37 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->seeInDatabase('rounds', ['id' => $otherRound]);
     }
 
+    public function testPlayerListShowsWinningsAndSortsByGroupAndWinnings(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
+        $courseId = (new CourseModel())->insert(['name' => 'Course']);
+        $roundId  = (new RoundModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-05-03']);
+        $round2   = (new RoundModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-05-10']);
+        $players  = new PlayerModel();
+        $adams    = (int) $players->insert(['first_name' => 'Al', 'last_name' => 'Adams', 'league_id' => $leagueId]);
+        $baker    = (int) $players->insert(['first_name' => 'Bo', 'last_name' => 'Baker', 'league_id' => $leagueId]);
+        $cole     = (int) $players->insert(['first_name' => 'Cy', 'last_name' => 'Cole', 'league_id' => $leagueId]);
+        $db       = db_connect();
+        $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 2, 'player1_id' => $adams, 'active' => 1]);
+        $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 1, 'player1_id' => $cole, 'active' => 1]);
+        $db->table('scores')->insert(['league_id' => $leagueId, 'player_id' => $baker, 'round_id' => $roundId, 'winnings_cents' => 1550]);
+        $db->table('scores')->insert(['league_id' => $leagueId, 'player_id' => $baker, 'round_id' => $round2, 'winnings_cents' => 1000]);
+        $db->table('scores')->insert(['league_id' => $leagueId, 'player_id' => $adams, 'round_id' => $roundId, 'winnings_cents' => 500]);
+
+        $order = function (string $sort) use ($leagueId): array {
+            $html = $this->asAdmin()->get("admin/players?league_id={$leagueId}&sort={$sort}")->getBody();
+            preg_match_all('#<td>(Adams|Baker|Cole)</td>#', $html, $m);
+
+            return $m[1];
+        };
+
+        $this->assertSame(['Adams', 'Baker', 'Cole'], $order('name'));
+        $this->assertSame(['Cole', 'Adams', 'Baker'], $order('group'));    // group 1, group 2, none
+        $this->assertSame(['Baker', 'Adams', 'Cole'], $order('winnings')); // $25.50, $5.00, $0.00
+
+        $this->asAdmin()->get("admin/players?league_id={$leagueId}")->assertSee('$25.50');
+    }
+
     public function testAdminCannotRemoveOwnAdminAccess(): void
     {
         $result = $this->asAdmin()->post("admin/players/{$this->adminId}", [
