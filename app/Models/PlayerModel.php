@@ -18,6 +18,8 @@ class PlayerModel extends Model
     ];
 
     protected $validationRules = [
+        // Needed for the {id} placeholder in the member_number unique rule.
+        'id'               => 'permit_empty|is_natural_no_zero',
         'member_number'    => 'permit_empty|integer|greater_than_equal_to[100]|less_than_equal_to[999]|is_unique[players.member_number,id,{id}]',
         'league_id'        => 'permit_empty|is_natural_no_zero',
         'first_name'       => 'required|max_length[50]',
