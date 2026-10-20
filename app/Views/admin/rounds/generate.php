@@ -30,3 +30,20 @@
         <button type="submit">Generate rounds</button>
     </form>
 </section>
+
+<section class="panel panel-danger" id="delete-rounds">
+    <h2>Delete all rounds</h2>
+    <p class="muted">Removes every round in the league, e.g. to start over after generating rounds with the wrong dates.
+        Rounds that already have scores are kept.</p>
+    <form method="post" action="<?= site_url('admin/rounds/delete-all') ?>" class="form inline"
+          onsubmit="var s = this.league_id; return confirm('Delete all rounds in ' + s.options[s.selectedIndex].text + '? This cannot be undone.')">
+        <?= csrf_field() ?>
+        <label for="del_league">League</label>
+        <select id="del_league" name="league_id" required>
+            <?php foreach ($fields['league_id']['options'] as $key => $label): ?>
+                <option value="<?= esc((string) $key, 'attr') ?>" <?= (string) ($filterValues['league_id'] ?? '') === (string) $key ? 'selected' : '' ?>><?= esc($label) ?></option>
+            <?php endforeach ?>
+        </select>
+        <button type="submit" class="button-danger">Delete all rounds</button>
+    </form>
+</section>

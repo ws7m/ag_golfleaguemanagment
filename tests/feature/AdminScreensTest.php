@@ -266,6 +266,27 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->seeInDatabase('rounds', ['league_id' => $leagueId, 'name' => 'Round 3', 'round_date' => '2027-05-17', 'status' => 'scheduled']);
     }
 
+    public function testDeleteAllRoundsKeepsRoundsWithScores(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
+        $otherId  = (new LeagueModel())->insert(['name' => 'Other league']);
+        $courseId = (new CourseModel())->insert(['name' => 'Course']);
+        $rounds   = new RoundModel();
+        $scored   = $rounds->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-05-03']);
+        $rounds->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-05-10']);
+        $rounds->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-05-17']);
+        $otherRound = $rounds->insert(['league_id' => $otherId, 'course_id' => $courseId, 'round_date' => '2027-05-10']);
+        $playerId   = (new PlayerModel())->insert(['first_name' => 'Jo', 'last_name' => 'Golfer']);
+        db_connect()->table('scores')->insert(['league_id' => $leagueId, 'player_id' => $playerId, 'round_id' => $scored]);
+
+        $this->asAdmin()->post('admin/rounds/delete-all', ['league_id' => $leagueId])
+            ->assertSessionHas('message', '2 rounds deleted from League. 1 kept because they already have scores.');
+
+        $this->assertSame(1, (new RoundModel())->where('league_id', $leagueId)->countAllResults());
+        $this->seeInDatabase('rounds', ['id' => $scored]);
+        $this->seeInDatabase('rounds', ['id' => $otherRound]);
+    }
+
     public function testAdminCannotRemoveOwnAdminAccess(): void
     {
         $result = $this->asAdmin()->post("admin/players/{$this->adminId}", [

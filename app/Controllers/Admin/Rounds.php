@@ -16,7 +16,7 @@ class Rounds extends CrudController
     protected array $filters     = ['league_id'];
     protected array $orderBy     = ['round_date' => 'ASC'];
     protected ?string $extraIndexView = 'admin/rounds/generate';
-    protected array $headActions      = ['Generate rounds' => '#generate'];
+    protected array $headActions      = ['Generate rounds' => '#generate', 'Delete all rounds' => '#delete-rounds'];
 
     // Safety limit on how many rounds one click can create.
     private const MAX_GENERATED = 52;
@@ -44,6 +44,48 @@ class Rounds extends CrudController
     protected function rowActions(): array
     {
         return ['Scores' => 'admin/scores?round_id={id}'];
+    }
+
+    /**
+     * Deletes every round in a league that has no scores yet, to undo
+     * mistakes such as generating rounds with the wrong dates. Rounds that
+     * already have scores are kept.
+     */
+    public function deleteAll()
+    {
+        $leagueId = (int) $this->request->getPost('league_id');
+        $back     = redirect()->to($this->baseRoute . '?league_id=' . $leagueId);
+        $league   = $leagueId ? (new LeagueModel())->find($leagueId) : null;
+
+        if ($league === null) {
+            return $back->with('error', 'Choose a league.');
+        }
+
+        $db        = db_connect();
+        $hasScores = $db->table('scores')->select('round_id')->distinct()->get()->getResultArray();
+        $hasScores = array_map('intval', array_column($hasScores, 'round_id'));
+
+        $rounds  = (new RoundModel())->where('league_id', $leagueId)->findAll();
+        $delete  = [];
+        $kept    = 0;
+        foreach ($rounds as $round) {
+            if (in_array((int) $round['id'], $hasScores, true)) {
+                $kept++;
+            } else {
+                $delete[] = (int) $round['id'];
+            }
+        }
+
+        if ($delete !== []) {
+            (new RoundModel())->whereIn('id', $delete)->delete();
+        }
+
+        $message = count($delete) . " rounds deleted from {$league['name']}.";
+        if ($kept > 0) {
+            $message .= " {$kept} kept because they already have scores.";
+        }
+
+        return $back->with('message', $message);
     }
 
     /**
