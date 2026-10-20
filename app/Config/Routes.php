@@ -48,6 +48,8 @@ $routes->group('admin', ['filter' => 'adminauth', 'namespace' => 'App\Controller
     $routes->post('tee-times/shift', 'TeeTimes::shift');
     $routes->post('tee-times/generate', 'TeeTimes::generate');
     $routes->post('tee-times/delete-all', 'TeeTimes::deleteAll');
+    $routes->post('groups/generate', 'Groups::generate');
+    $routes->post('groups/delete-all', 'Groups::deleteAll');
     $routes->get('settings', 'Settings::edit');
     $routes->post('settings', 'Settings::update');
 });
