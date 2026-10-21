@@ -634,6 +634,35 @@ final class AdminScreensTest extends CIUnitTestCase
             ->assertSessionHas('message', '0 players from 2 groups added to this round. 3 were already in it.');
     }
 
+    public function testDeleteAllPlayersKeepsAdminsAndPlayersWithScores(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
+        $otherId  = (new LeagueModel())->insert(['name' => 'Other']);
+        $courseId = (new CourseModel())->insert(['name' => 'Course']);
+        $roundId  = (new RoundModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-05-03']);
+        $players  = new PlayerModel();
+        $plain    = (int) $players->insert(['first_name' => 'Ann', 'last_name' => 'A', 'league_id' => $leagueId]);
+        $inGroup  = (int) $players->insert(['first_name' => 'Bob', 'last_name' => 'B', 'league_id' => $leagueId]);
+        $scored   = (int) $players->insert(['first_name' => 'Cy', 'last_name' => 'C', 'league_id' => $leagueId]);
+        $admin    = (int) $players->insert(['first_name' => 'Di', 'last_name' => 'D', 'league_id' => $leagueId, 'is_admin' => 1]);
+        $other    = (int) $players->insert(['first_name' => 'Ed', 'last_name' => 'E', 'league_id' => $otherId]);
+        $db       = db_connect();
+        $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 1, 'player1_id' => $inGroup, 'player2_id' => $scored, 'active' => 1]);
+        $groupId = $db->insertID();
+        $db->table('scores')->insert(['league_id' => $leagueId, 'player_id' => $scored, 'round_id' => $roundId]);
+
+        $this->asAdmin()->post('admin/players/delete-all', ['league_id' => $leagueId])
+            ->assertSessionHas('message', '2 players deleted. 1 admins kept. 1 kept because they have scores.');
+
+        $this->dontSeeInDatabase('players', ['id' => $plain]);
+        $this->dontSeeInDatabase('players', ['id' => $inGroup]);
+        $this->seeInDatabase('players', ['id' => $scored]);
+        $this->seeInDatabase('players', ['id' => $admin]);
+        $this->seeInDatabase('players', ['id' => $other]);
+        // Removed from the group roster; the player with scores stays on it.
+        $this->seeInDatabase('league_groups', ['id' => $groupId, 'player1_id' => null, 'player2_id' => $scored]);
+    }
+
     // TEMPORARY: remove with the "Add test players" helper.
     public function testAddTestPlayers(): void
     {

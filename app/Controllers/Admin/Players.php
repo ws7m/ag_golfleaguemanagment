@@ -26,10 +26,10 @@ class Players extends CrudController
         'winnings' => 'Winnings (most first)',
     ];
 
-    // TEMPORARY: the "Add test players" panel, for trying out groups and
-    // rounds. Remove with addTestPlayers(), its route and its view.
-    protected ?string $extraIndexView = 'admin/players/add_test';
-    protected array $headActions      = ['Add test players' => '#add-test-players'];
+    protected ?string $extraIndexView = 'admin/players/tools';
+    // "Add test players" is TEMPORARY: remove it with addTestPlayers(), its
+    // route and the add_test view.
+    protected array $headActions = ['Add test players' => '#add-test-players', 'Delete all players' => '#delete-players'];
 
     protected function listFields(): array
     {
@@ -148,6 +148,59 @@ class Players extends CrudController
         }
 
         return array_map('intval', array_column($query->get()->getResultArray(), 'total', 'player_id'));
+    }
+
+    /**
+     * Deletes the players registered in a league, to start over (e.g. after
+     * adding test players). Removes them from group rosters first. Admins,
+     * the logged-in user, and players who already have scores are kept.
+     */
+    public function deleteAll()
+    {
+        $leagueId = (int) $this->request->getPost('league_id');
+        $back     = redirect()->to($this->baseRoute . '?league_id=' . $leagueId);
+        if ($leagueId <= 0) {
+            return $back->with('error', 'Choose a league.');
+        }
+
+        $db        = db_connect();
+        $players   = (new PlayerModel())->where('league_id', $leagueId)->where('is_player', 1)->findAll();
+        $hasScores = array_map('intval', array_column(
+            $db->table('scores')->select('player_id')->distinct()->get()->getResultArray(),
+            'player_id'
+        ));
+
+        $delete = [];
+        $kept   = ['admins' => 0, 'scores' => 0];
+        foreach ($players as $player) {
+            $id = (int) $player['id'];
+            if ($player['is_admin'] || $id === (int) session('admin_id')) {
+                $kept['admins']++;
+            } elseif (in_array($id, $hasScores, true)) {
+                $kept['scores']++;
+            } else {
+                $delete[] = $id;
+            }
+        }
+
+        if ($delete !== []) {
+            $db->transStart();
+            for ($i = 1; $i <= 6; $i++) {
+                $db->table('league_groups')->whereIn("player{$i}_id", $delete)->update(["player{$i}_id" => null]);
+            }
+            (new PlayerModel())->whereIn('id', $delete)->delete();
+            $db->transComplete();
+        }
+
+        $message = count($delete) . ' players deleted.';
+        if ($kept['admins'] > 0) {
+            $message .= " {$kept['admins']} admins kept.";
+        }
+        if ($kept['scores'] > 0) {
+            $message .= " {$kept['scores']} kept because they have scores.";
+        }
+
+        return $back->with('message', $message);
     }
 
     /**
