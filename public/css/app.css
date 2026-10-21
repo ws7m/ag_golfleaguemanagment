@@ -153,6 +153,8 @@ table.holes th, table.holes td { padding: 0.25rem; text-align: center; }
 table.holes .cell { width: 4.2rem; padding: 0.35rem; text-align: center; }
 table.holes .divider td { font-weight: 600; background: var(--bg); }
 table.holes tr.has-error th { color: var(--danger); }
+table.holes .totals th, table.holes .totals td { font-weight: 700; background: var(--bg); }
+table.holes .totals-all th, table.holes .totals-all td { border-top: 2px solid var(--border); }
 .tee-blue { color: #3b6fd8; }
 .tee-red { color: #d23d3d; }
 

@@ -27,19 +27,53 @@
             </tr>
             </thead>
             <tbody>
+            <?php
+            $tees  = \App\Controllers\Admin\Holes::TEES;
+            $stats = \App\Controllers\Admin\Holes::STATS;
+            // Sum of yardage or par over a range of holes; blank when nothing is entered.
+            $total = static function (int $from, int $to, string $key) use ($holes): string {
+                $sum = 0;
+                $any = false;
+                for ($h = $from; $h <= $to; $h++) {
+                    $value = $holes[$h][$key] ?? '';
+                    if (is_numeric($value)) {
+                        $sum += (int) $value;
+                        $any = true;
+                    }
+                }
+
+                return $any ? (string) $sum : '';
+            };
+            // A totals row: yardage and par are summed, hole handicap is not.
+            $totalsRow = static function (string $label, string $range, int $from, int $to) use ($tees, $stats, $total): string {
+                $html = '<tr class="totals totals-' . $range . '"><th>' . $label . '</th>';
+                foreach ($tees as $tee) {
+                    foreach ($stats as $stat) {
+                        $html .= $stat === 'handicap'
+                            ? '<td></td>'
+                            : '<td data-total="' . $tee . '_' . $stat . '" data-range="' . $range . '">' . $total($from, $to, "{$tee}_{$stat}") . '</td>';
+                    }
+                }
+
+                return $html . '</tr>';
+            };
+            ?>
             <?php for ($n = 1; $n <= 18; $n++): ?>
                 <?php if ($n === 10): ?><tr class="divider"><td colspan="10">Back nine</td></tr><?php endif ?>
                 <tr<?= isset($errors[$n]) ? ' class="has-error"' : '' ?>>
                     <th><?= $n ?></th>
-                    <?php foreach (\App\Controllers\Admin\Holes::TEES as $tee): ?>
-                        <?php foreach (\App\Controllers\Admin\Holes::STATS as $stat): ?>
+                    <?php foreach ($tees as $tee): ?>
+                        <?php foreach ($stats as $stat): ?>
                             <td><input type="number" inputmode="numeric" class="cell"
                                        name="holes[<?= $n ?>][<?= $tee ?>_<?= $stat ?>]"
+                                       data-hole="<?= $n ?>" data-key="<?= $tee ?>_<?= $stat ?>"
                                        aria-label="Hole <?= $n ?> <?= $tee ?> <?= $stat ?>"
                                        value="<?= esc((string) ($holes[$n]["{$tee}_{$stat}"] ?? ''), 'attr') ?>"></td>
                         <?php endforeach ?>
                     <?php endforeach ?>
                 </tr>
+                <?php if ($n === 9): ?><?= $totalsRow('Front 9', 'front', 1, 9) ?><?php endif ?>
+                <?php if ($n === 18): ?><?= $totalsRow('Back 9', 'back', 10, 18) ?><?= $totalsRow('Total', 'all', 1, 18) ?><?php endif ?>
             <?php endfor ?>
             </tbody>
         </table>
@@ -49,4 +83,26 @@
         <a href="<?= site_url('admin/courses') ?>">Back to courses</a>
     </div>
 </form>
+<script>
+// Keep the front 9, back 9 and total rows up to date while typing.
+(function () {
+    var table = document.querySelector('table.holes');
+    var ranges = { front: [1, 9], back: [10, 18], all: [1, 18] };
+    function update() {
+        table.querySelectorAll('[data-total]').forEach(function (cell) {
+            var range = ranges[cell.dataset.range];
+            var sum = 0, any = false;
+            table.querySelectorAll('input[data-key="' + cell.dataset.total + '"]').forEach(function (input) {
+                var hole = Number(input.dataset.hole);
+                if (hole >= range[0] && hole <= range[1] && input.value !== '' && !isNaN(input.value)) {
+                    sum += Number(input.value);
+                    any = true;
+                }
+            });
+            cell.textContent = any ? sum : '';
+        });
+    }
+    table.addEventListener('input', update);
+})();
+</script>
 <?= $this->endSection() ?>

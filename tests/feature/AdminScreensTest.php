@@ -154,6 +154,16 @@ final class AdminScreensTest extends CIUnitTestCase
             ->assertRedirectTo("/admin/courses/{$courseId}/holes");
         $this->assertSame(18, (new HoleModel())->where('course_id', $courseId)->countAllResults());
         $this->seeInDatabase('holes', ['course_id' => $courseId, 'number' => 12, 'nine' => 'back', 'white_yardage' => 312]);
+
+        // Front 9, back 9 and total rows add up yardage (301-318) and par (4 each).
+        $html = $this->asAdmin()->get("admin/courses/{$courseId}/holes")->getBody();
+        $this->assertStringContainsString('<td data-total="white_yardage" data-range="front">2745</td>', $html);
+        $this->assertStringContainsString('<td data-total="white_yardage" data-range="back">2826</td>', $html);
+        $this->assertStringContainsString('<td data-total="white_yardage" data-range="all">5571</td>', $html);
+        $this->assertStringContainsString('<td data-total="white_par" data-range="front">36</td>', $html);
+        $this->assertStringContainsString('<td data-total="white_par" data-range="all">72</td>', $html);
+        // Tees with nothing entered stay blank.
+        $this->assertStringContainsString('<td data-total="blue_yardage" data-range="all"></td>', $html);
     }
 
     public function testShiftTeeTimes(): void
