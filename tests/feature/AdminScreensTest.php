@@ -679,6 +679,14 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->assertNotNull($players->verifyLogin('player4', 'player4'));
 
         $this->asAdmin()->post('admin/players/add-test', ['league_id' => $leagueId, 'count' => '0'])->assertSessionHas('error');
+        $this->asAdmin()->post('admin/players/add-test', ['league_id' => $leagueId, 'count' => '201'])->assertSessionHas('error');
+
+        // 200 at once is allowed and quick.
+        $start = microtime(true);
+        $this->asAdmin()->post('admin/players/add-test', ['league_id' => $leagueId, 'count' => '200'])
+            ->assertSessionHas('message', '200 test players added (Player6 to Player205). Each logs in with playerN / playerN.');
+        $this->assertLessThan(15, microtime(true) - $start, 'Adding 200 test players should be well within the 30s request limit');
+        $this->assertNotNull($players->verifyLogin('player205', 'player205'));
     }
 
     public function testAdminCannotRemoveOwnAdminAccess(): void

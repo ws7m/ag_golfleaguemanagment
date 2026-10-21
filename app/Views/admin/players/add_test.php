@@ -13,7 +13,7 @@
             <?php endforeach ?>
         </select>
         <label for="test_count">How many</label>
-        <input type="number" id="test_count" name="count" min="1" max="100" value="4" required style="width: 6rem">
+        <input type="number" id="test_count" name="count" min="1" max="200" value="4" required style="width: 6rem">
         <button type="submit">Add test players</button>
     </form>
 </section>

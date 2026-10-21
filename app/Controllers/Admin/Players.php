@@ -215,8 +215,8 @@ class Players extends CrudController
         $leagueId = (int) $this->request->getPost('league_id');
         $count    = (int) $this->request->getPost('count');
         $back     = redirect()->to($this->baseRoute . '?league_id=' . $leagueId);
-        if ($leagueId <= 0 || $count < 1 || $count > 100) {
-            return $back->with('error', 'Choose a league and a number of players from 1 to 100.');
+        if ($leagueId <= 0 || $count < 1 || $count > 200) {
+            return $back->with('error', 'Choose a league and a number of players from 1 to 200.');
         }
 
         $players = new PlayerModel();
@@ -230,15 +230,18 @@ class Players extends CrudController
         $db = db_connect();
         $db->transStart();
         for ($n = $highest + 1; $n <= $highest + $count; $n++) {
-            $id = $players->insert([
-                'first_name' => (string) $n,
-                'last_name'  => "Player{$n}",
-                'login'      => "player{$n}",
-                'league_id'  => $leagueId,
-                'is_player'  => 1,
-                'active'     => 1,
+            // Hashed once at low strength: a normal-strength hash takes ~0.2s,
+            // too slow for 200 players in one request, and these are
+            // throwaway test accounts. password_verify() works the same.
+            $players->insert([
+                'first_name'    => (string) $n,
+                'last_name'     => "Player{$n}",
+                'login'         => "player{$n}",
+                'password_hash' => password_hash("player{$n}", PASSWORD_BCRYPT, ['cost' => 4]),
+                'league_id'     => $leagueId,
+                'is_player'     => 1,
+                'active'        => 1,
             ]);
-            $players->setPassword((int) $id, "player{$n}");
         }
         $db->transComplete();
 
