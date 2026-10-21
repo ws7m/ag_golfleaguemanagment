@@ -55,6 +55,9 @@ abstract class CrudController extends BaseController
     /** Extra view shown under the list (e.g. the tee time shift form) */
     protected ?string $extraIndexView = null;
 
+    /** Extra view shown under the edit form for an existing record */
+    protected ?string $extraFormView = null;
+
     /**
      * List column whose value links to the edit page. When set (and there are
      * no other row actions) the separate Edit column is left out, to save width.
@@ -257,6 +260,7 @@ abstract class CrudController extends BaseController
             'filters'   => $this->filters,
             'actions'   => $this->rowActions(),
             'editLinkColumn' => $this->editLinkColumn,
+            'extraFormView'  => $this->extraFormView,
             'headActions' => $this->headActions,
             'sortOptions' => $this->sortOptions,
             'sortValue'   => $this->sortChoice(),

@@ -166,6 +166,26 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->assertStringContainsString('<td data-total="blue_yardage" data-range="all"></td>', $html);
     }
 
+    public function testExportCourseAsCsv(): void
+    {
+        $courseId = (new CourseModel())->insert(['name' => 'Home Course', 'city' => 'Fort Collins', 'front_slope' => 113]);
+        (new HoleModel())->insert(['course_id' => $courseId, 'number' => 1, 'nine' => 'front', 'white_par' => 4, 'handicap' => 5]);
+
+        $this->asAdmin()->get('admin/courses')->assertSee("admin/courses/{$courseId}/export");
+
+        $result = $this->asAdmin()->get("admin/courses/{$courseId}/export");
+        $result->assertOK();
+        $result->assertHeader('Content-Type', 'text/csv; charset=utf-8');
+        $result->assertHeader('Content-Disposition', 'attachment; filename="course-home-course.csv"');
+        $csv = $result->getBody();
+        $this->assertStringContainsString('city,"Fort Collins"', $csv);
+        $this->assertStringContainsString("front_slope,113\n", $csv);
+        $this->assertStringContainsString("\n1,,,,4,,,5,,,\n", $csv);
+
+        // The import form is on the course's edit page.
+        $this->asAdmin()->get("admin/courses/{$courseId}/edit")->assertSee("admin/courses/{$courseId}/import");
+    }
+
     public function testHoleHandicapsMustBeOneToEighteenAndNotRepeat(): void
     {
         $courseId = (new CourseModel())->insert(['name' => 'Home Course']);

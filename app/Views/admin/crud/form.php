@@ -35,6 +35,10 @@
     </div>
 </form>
 
+<?php if ($id !== null && $extraFormView !== null): ?>
+    <?= view($extraFormView, ['id' => $id, 'record' => $record]) ?>
+<?php endif ?>
+
 <?php if ($id !== null): ?>
     <form method="post" action="<?= site_url("{$baseRoute}/{$id}/delete") ?>" class="delete-form"
           onsubmit="return confirm('Delete this <?= esc(strtolower($singular), 'js') ?>? This cannot be undone.')">
