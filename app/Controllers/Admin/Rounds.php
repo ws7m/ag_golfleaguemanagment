@@ -2,7 +2,10 @@
 
 namespace App\Controllers\Admin;
 
+use App\Models\LeagueGroupModel;
 use App\Models\LeagueModel;
+use App\Models\PlayerModel;
+use App\Models\ScoreModel;
 use App\Models\RoundModel;
 use DateTimeImmutable;
 
@@ -17,6 +20,7 @@ class Rounds extends CrudController
     protected array $orderBy     = ['round_date' => 'ASC'];
     protected ?string $extraIndexView = 'admin/rounds/generate';
     protected array $headActions      = ['Generate rounds' => '#generate', 'Delete all rounds' => '#delete-rounds'];
+    protected ?string $extraFormView  = 'admin/rounds/add_groups';
 
     // Safety limit on how many rounds one click can create.
     private const MAX_GENERATED = 52;
@@ -44,6 +48,67 @@ class Rounds extends CrudController
     protected function rowActions(): array
     {
         return ['Scores' => 'admin/scores?round_id={id}'];
+    }
+
+    /**
+     * Enters every player in the league's active groups into this round: each
+     * gets a score record (marked playing, not yet paid) with their group and
+     * the nine that group is playing. Players already in the round and
+     * inactive players are skipped.
+     */
+    public function addGroups(int $id)
+    {
+        $round = $this->findOr404($id);
+        $back  = redirect()->to("{$this->baseRoute}/{$id}/edit");
+
+        $groups = (new LeagueGroupModel())
+            ->where('league_id', $round['league_id'])
+            ->where('active', 1)
+            ->orderBy('group_number')
+            ->findAll();
+        if ($groups === []) {
+            return $back->with('error', 'This league has no active groups yet.');
+        }
+
+        $scores  = new ScoreModel();
+        $entered = array_map('intval', array_column($scores->where('round_id', $id)->findAll(), 'player_id'));
+        $active  = array_map('intval', array_column((new PlayerModel())->where('active', 1)->findAll(), 'id'));
+        $added   = 0;
+        $already = 0;
+
+        $db = db_connect();
+        $db->transStart();
+        foreach ($groups as $group) {
+            foreach (LeagueGroupModel::playerIds($group) as $playerId) {
+                if (! in_array($playerId, $active, true)) {
+                    continue;
+                }
+                if (in_array($playerId, $entered, true)) {
+                    $already++;
+
+                    continue;
+                }
+                $scores->insert([
+                    'league_id' => $round['league_id'],
+                    'round_id'  => $id,
+                    'player_id' => $playerId,
+                    'group_id'  => $group['id'],
+                    'nine'      => $group['nine'] ?: 'front',
+                    'playing'   => 1,
+                    'paid'      => 0,
+                ]);
+                $entered[] = $playerId;
+                $added++;
+            }
+        }
+        $db->transComplete();
+
+        $message = "{$added} players from " . count($groups) . ' groups added to this round.';
+        if ($already > 0) {
+            $message .= " {$already} were already in it.";
+        }
+
+        return $back->with('message', $message);
     }
 
     /**

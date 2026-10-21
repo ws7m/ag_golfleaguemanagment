@@ -43,6 +43,7 @@ $routes->group('admin', ['filter' => 'adminauth', 'namespace' => 'App\Controller
     $routes->get('leagues/(:num)/copy', 'Leagues::copy/$1');
     $routes->post('rounds/generate', 'Rounds::generate');
     $routes->post('rounds/delete-all', 'Rounds::deleteAll');
+    $routes->post('rounds/(:num)/add-groups', 'Rounds::addGroups/$1');
     $routes->get('courses/(:num)/holes', 'Holes::edit/$1');
     $routes->post('courses/(:num)/holes', 'Holes::update/$1');
     $routes->get('courses/(:num)/export', 'Courses::export/$1');
@@ -51,6 +52,7 @@ $routes->group('admin', ['filter' => 'adminauth', 'namespace' => 'App\Controller
     $routes->post('tee-times/generate', 'TeeTimes::generate');
     $routes->post('tee-times/delete-all', 'TeeTimes::deleteAll');
     $routes->post('groups/generate', 'Groups::generate');
+    $routes->post('groups/switch-nine', 'Groups::switchNine');
     $routes->post('groups/delete-all', 'Groups::deleteAll');
     $routes->get('settings', 'Settings::edit');
     $routes->post('settings', 'Settings::update');

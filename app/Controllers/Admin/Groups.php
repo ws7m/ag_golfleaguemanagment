@@ -4,7 +4,7 @@ namespace App\Controllers\Admin;
 
 use App\Models\LeagueGroupModel;
 use App\Models\LeagueModel;
-use App\Models\TeeTimeModel;
+use App\Models\PlayerModel;
 
 class Groups extends CrudController
 {
@@ -12,17 +12,19 @@ class Groups extends CrudController
     protected string $title      = 'Groups';
     protected string $singular   = 'Group';
     protected string $baseRoute  = 'admin/groups';
-    protected array $listColumns = ['group_number', 'front_tee_time_id', 'back_tee_time_id', 'player1_id', 'player2_id', 'player3_id', 'player4_id', 'active'];
+    protected array $listColumns = ['group_number', 'nine', 'front_tee_time_id', 'back_tee_time_id', 'player1_id', 'player2_id', 'player3_id', 'player4_id', 'active'];
     protected array $filters     = ['league_id'];
     protected array $orderBy     = ['group_number' => 'ASC'];
     protected ?string $extraIndexView = 'admin/groups/tools';
-    protected array $headActions      = ['Create groups from tee times' => '#create-groups', 'Delete all groups' => '#delete-groups'];
+    protected array $headActions      = ['Switch front/back' => '#switch-nine', 'Create groups for players' => '#create-groups', 'Delete all groups' => '#delete-groups'];
 
     protected function fields(): array
     {
         $fields = [
             'league_id'         => ['label' => 'League', 'type' => 'select', 'options' => 'leagues', 'default' => 'currentLeague', 'required' => true],
             'group_number'      => ['label' => 'Group number', 'type' => 'number', 'required' => true],
+            'nine'              => ['label' => 'Playing', 'type' => 'select', 'options' => ['front' => 'Front nine', 'back' => 'Back nine'], 'listOptions' => ['front' => 'Front', 'back' => 'Back'], 'default' => 'front', 'required' => true,
+                'help' => 'The nine this group is playing now. Use "Switch front/back for all groups" on the Groups page to swap every group between rounds.'],
             'front_tee_time_id' => ['label' => 'Front nine tee time', 'type' => 'select', 'options' => 'teeTimes', 'listOptions' => 'teeTimesShort'],
             'back_tee_time_id'  => ['label' => 'Back nine tee time', 'type' => 'select', 'options' => 'teeTimes', 'listOptions' => 'teeTimesShort'],
         ];
@@ -34,11 +36,14 @@ class Groups extends CrudController
         return $fields;
     }
 
+    // Players in a group, for working out how many groups a league needs.
+    public const PLAYERS_PER_GROUP = 4;
+
     /**
-     * Creates one group per front nine tee time in a league, in time order,
-     * numbered after the league's existing groups. Each gets the closest back
-     * nine tee time, preferring one no other group is using yet. Front nine
-     * tee times that already have a group are skipped.
+     * Makes sure a league has enough groups for its registered players, at 4
+     * players to a group: 8 players need 2 groups, 9 need 3. Active groups
+     * the league already has count towards that; new groups are numbered
+     * after the existing ones, start on the front nine and have no players.
      */
     public function generate()
     {
@@ -49,51 +54,62 @@ class Groups extends CrudController
             return $back->with('error', 'Choose a league.');
         }
 
-        $teeTimes = (new TeeTimeModel())->where('league_id', $leagueId)->orderBy('tee_time')->findAll();
-        $fronts   = array_values(array_filter($teeTimes, static fn ($t) => $t['nine'] === 'front'));
-        $backs    = array_values(array_filter($teeTimes, static fn ($t) => $t['nine'] === 'back'));
-        if ($fronts === []) {
-            return $back->with('error', "{$league['name']} has no front nine tee times yet. Create them on the Tee times page first.");
+        $registered = (new PlayerModel())
+            ->where('league_id', $leagueId)
+            ->where('active', 1)
+            ->where('is_player', 1)
+            ->countAllResults();
+        if ($registered === 0) {
+            return $back->with('error', "{$league['name']} has no registered players yet.");
         }
 
-        $model      = new LeagueGroupModel();
-        $existing   = $model->where('league_id', $leagueId)->findAll();
-        $usedFront  = array_map('intval', array_filter(array_column($existing, 'front_tee_time_id')));
-        $usedBack   = array_map('intval', array_filter(array_column($existing, 'back_tee_time_id')));
-        $nextNumber = (int) max([0, ...array_column($existing, 'group_number')]) + 1;
-        $created    = 0;
+        $needed   = (int) ceil($registered / self::PLAYERS_PER_GROUP);
+        $model    = new LeagueGroupModel();
+        $existing = $model->where('league_id', $leagueId)->findAll();
+        $active   = count(array_filter($existing, static fn ($g) => (int) $g['active'] === 1));
+        $summary  = "{$registered} registered players need {$needed} groups of " . self::PLAYERS_PER_GROUP . '.';
+
+        if ($active >= $needed) {
+            return $back->with('message', "{$summary} The league already has {$active} active groups, so none were created.");
+        }
+
+        $next  = (int) max([0, ...array_column($existing, 'group_number')]) + 1;
+        $first = $next;
 
         $db = db_connect();
         $db->transStart();
-        foreach ($fronts as $front) {
-            if (in_array((int) $front['id'], $usedFront, true)) {
-                continue;
-            }
-            $backId = self::closestTeeTime($front['tee_time'], $backs, $usedBack);
-            if ($backId !== null) {
-                $usedBack[] = $backId;
-            }
-            $model->insert([
-                'league_id'         => $leagueId,
-                'group_number'      => $nextNumber++,
-                'front_tee_time_id' => (int) $front['id'],
-                'back_tee_time_id'  => $backId,
-                'active'            => 1,
-            ]);
-            $created++;
+        for ($i = $active; $i < $needed; $i++) {
+            $model->insert(['league_id' => $leagueId, 'group_number' => $next++, 'nine' => 'front', 'active' => 1]);
         }
         $db->transComplete();
 
-        $skipped = count($fronts) - $created;
-        $message = "{$created} groups created.";
-        if ($skipped > 0) {
-            $message .= " {$skipped} front nine tee times already had a group.";
-        }
-        if ($backs === []) {
-            $message .= ' There are no back nine tee times, so set those on each group later.';
+        $created = $next - $first;
+        $numbers = $created === 1 ? "group {$first}" : 'groups ' . $first . '–' . ($next - 1);
+
+        return $back->with('message', "{$summary} Created {$created} ({$numbers}). Add players and tee times to them.");
+    }
+
+    /**
+     * Switches every group in a league to the other nine: front becomes back
+     * and back becomes front.
+     */
+    public function switchNine()
+    {
+        $leagueId = (int) $this->request->getPost('league_id');
+        $back     = redirect()->to($this->baseRoute . '?league_id=' . $leagueId);
+        if ($leagueId <= 0) {
+            return $back->with('error', 'Choose a league.');
         }
 
-        return $back->with('message', $message);
+        $db    = db_connect();
+        $table = $db->prefixTable('league_groups');
+        $db->query(
+            "UPDATE {$table} SET nine = CASE nine WHEN 'front' THEN 'back' ELSE 'front' END, updated_at = ? WHERE league_id = ?",
+            [date('Y-m-d H:i:s'), $leagueId]
+        );
+        $count = $db->affectedRows();
+
+        return $back->with('message', "{$count} groups switched to the other nine.");
     }
 
     /**
@@ -130,31 +146,6 @@ class Groups extends CrudController
         }
 
         return $back->with('message', $message);
-    }
-
-    /**
-     * The id of the back nine tee time closest to $time ("HH:MM"), preferring
-     * ones not in $used; earlier wins a tie. Null if there are none.
-     *
-     * @param list<array> $backs
-     * @param list<int>   $used
-     */
-    private static function closestTeeTime(string $time, array $backs, array $used): ?int
-    {
-        $minutes = static fn (string $t) => (int) substr($t, 0, 2) * 60 + (int) substr($t, 3, 2);
-        $target  = $minutes($time);
-        $best    = null;
-        $bestKey = null;
-        foreach ($backs as $teeTime) {
-            // Unused tee times sort before used ones, then by distance, then earlier.
-            $key = [in_array((int) $teeTime['id'], $used, true) ? 1 : 0, abs($minutes($teeTime['tee_time']) - $target), $minutes($teeTime['tee_time'])];
-            if ($bestKey === null || $key < $bestKey) {
-                $best    = (int) $teeTime['id'];
-                $bestKey = $key;
-            }
-        }
-
-        return $best;
     }
 
     protected function checkBeforeSave(array $data, ?int $id): ?string

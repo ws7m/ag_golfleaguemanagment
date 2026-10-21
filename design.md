@@ -106,6 +106,7 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
   - Id
   - League Id
   - Group number
+  - Playing - Front or back; the nine the group is playing now. A button switches every group in the league to the other nine between rounds.
   - Front Tee time Id
   - Back Tee time Id
   - Player1 Id - Normal member of the group
@@ -141,6 +142,7 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
   - Entry fee - Default $10
   - Use for handicap
   - Total pot - Total of the entry fees marked paid on this round's score records; set when the round is scored
+- On a round's edit page, "Add all groups to this round" creates a score record for every active player in the league's active groups, with their group and the nine the group is playing. Players already in the round are skipped.
 
 ### 2.8 Games
 - As admin, I want to be able to create/update/delete golf games to play on rounds

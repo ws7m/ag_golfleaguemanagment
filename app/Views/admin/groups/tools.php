@@ -10,13 +10,27 @@ $leagueOptions = static function (string $id) use ($fields, $filterValues): stri
     return $html . '</select>';
 };
 ?>
+<section class="panel" id="switch-nine">
+    <h2>Switch front/back for all groups</h2>
+    <p class="muted">Every group in the league swaps to the other nine: groups playing the front nine move to the back nine,
+        and back nine groups move to the front. Use it between rounds.</p>
+    <form method="post" action="<?= site_url('admin/groups/switch-nine') ?>" class="form inline"
+          onsubmit="var s = this.league_id; return confirm('Switch every group in ' + s.options[s.selectedIndex].text + ' to the other nine?')">
+        <?= csrf_field() ?>
+        <label for="switch_league">League</label>
+        <?= $leagueOptions('switch_league') ?>
+        <button type="submit">Switch front/back</button>
+    </form>
+</section>
+
 <section class="panel" id="create-groups">
-    <h2>Create groups from tee times</h2>
-    <p class="muted">Creates one group for each front nine tee time, in time order, and gives each the closest back nine tee time
-        (one not already used by another group, where possible). Front nine tee times that already have a group are skipped.
-        Add players to the groups afterwards.</p>
+    <h2>Create groups for registered players</h2>
+    <p class="muted">Works out how many groups the league needs for its registered players at
+        <?= \App\Controllers\Admin\Groups::PLAYERS_PER_GROUP ?> players to a group (8 players need 2 groups, 9 need 3), and
+        creates any that are missing. Active groups the league already has count towards that. New groups are numbered after
+        the existing ones, start on the front nine, and have no players or tee times yet.</p>
     <form method="post" action="<?= site_url('admin/groups/generate') ?>" class="form inline"
-          onsubmit="return confirm('Create a group for each front nine tee time?')">
+          onsubmit="return confirm('Create the groups needed for this league\'s registered players?')">
         <?= csrf_field() ?>
         <label for="gen_group_league">League</label>
         <?= $leagueOptions('gen_group_league') ?>

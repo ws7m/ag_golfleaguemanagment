@@ -14,7 +14,7 @@ class LeagueGroupModel extends Model
     protected $returnType    = 'array';
     protected $useTimestamps = true;
     protected $allowedFields = [
-        'league_id', 'group_number', 'front_tee_time_id', 'back_tee_time_id',
+        'league_id', 'group_number', 'nine', 'front_tee_time_id', 'back_tee_time_id',
         'player1_id', 'player2_id', 'player3_id', 'player4_id', 'player5_id', 'player6_id',
         'active',
     ];
@@ -22,6 +22,7 @@ class LeagueGroupModel extends Model
     protected $validationRules = [
         'league_id'         => 'required|is_natural_no_zero',
         'group_number'      => 'required|is_natural_no_zero',
+        'nine'              => 'permit_empty|in_list[front,back]',
         'front_tee_time_id' => 'permit_empty|is_natural_no_zero',
         'back_tee_time_id'  => 'permit_empty|is_natural_no_zero',
         'player1_id'        => 'permit_empty|is_natural_no_zero',

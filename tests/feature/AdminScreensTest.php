@@ -523,48 +523,36 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->assertMatchesRegularExpression('#<td>Front</td>\s*<td>None</td>\s*<td>16:10</td>#', $html);
     }
 
-    public function testCreateGroupsFromFrontNineTeeTimesWithClosestBackNine(): void
+    public function testCreateGroupsForRegisteredPlayersAtFourToAGroup(): void
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'League']);
-        $courseId = (new CourseModel())->insert(['name' => 'Course']);
-        $teeTimes = new TeeTimeModel();
-        $add      = static fn (string $nine, string $time) => (int) $teeTimes->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'nine' => $nine, 'tee_time' => $time]);
-        $f1 = $add('front', '16:00');
-        $f2 = $add('front', '16:10');
-        $f3 = $add('front', '16:20');
-        $b1 = $add('back', '16:02');
-        $b2 = $add('back', '16:12');
-        $b3 = $add('back', '16:22');
-        // An existing group already uses the 16:10 front tee time.
-        db_connect()->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 1, 'front_tee_time_id' => $f2, 'active' => 1]);
+        $otherId  = (new LeagueModel())->insert(['name' => 'Other']);
+        $players  = new PlayerModel();
+        for ($i = 1; $i <= 9; $i++) {
+            $players->insert(['first_name' => "P{$i}", 'last_name' => 'Golfer', 'league_id' => $leagueId]);
+        }
+        // Not counted: inactive, another league, or an admin-only account.
+        $players->insert(['first_name' => 'Gone', 'last_name' => 'Away', 'league_id' => $leagueId, 'active' => 0]);
+        $players->insert(['first_name' => 'Elsewhere', 'last_name' => 'X', 'league_id' => $otherId]);
+        $players->insert(['first_name' => 'Admin', 'last_name' => 'Only', 'league_id' => $leagueId, 'is_player' => 0]);
+        // One active group already exists, plus an inactive one that doesn't count.
+        $db = db_connect();
+        $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 1, 'active' => 1]);
+        $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 2, 'active' => 0]);
 
+        // 9 players need 3 groups; 1 active group exists, so 2 are created as groups 3 and 4.
         $this->asAdmin()->post('admin/groups/generate', ['league_id' => $leagueId])
-            ->assertSessionHas('message', '2 groups created. 1 front nine tee times already had a group.');
+            ->assertSessionHas('message', '9 registered players need 3 groups of 4. Created 2 (groups 3–4). Add players and tee times to them.');
+        $this->seeInDatabase('league_groups', ['league_id' => $leagueId, 'group_number' => 3, 'nine' => 'front', 'active' => 1]);
+        $this->seeInDatabase('league_groups', ['league_id' => $leagueId, 'group_number' => 4, 'player1_id' => null]);
 
-        $this->seeInDatabase('league_groups', ['league_id' => $leagueId, 'group_number' => 2, 'front_tee_time_id' => $f1, 'back_tee_time_id' => $b1]);
-        $this->seeInDatabase('league_groups', ['league_id' => $leagueId, 'group_number' => 3, 'front_tee_time_id' => $f3, 'back_tee_time_id' => $b3]);
-
-        // Running it again creates nothing new.
+        // Running it again creates none.
         $this->asAdmin()->post('admin/groups/generate', ['league_id' => $leagueId])
-            ->assertSessionHas('message', '0 groups created. 3 front nine tee times already had a group.');
-    }
+            ->assertSessionHas('message', '9 registered players need 3 groups of 4. The league already has 3 active groups, so none were created.');
 
-    public function testClosestBackNinePrefersAnUnusedTeeTime(): void
-    {
-        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
-        $courseId = (new CourseModel())->insert(['name' => 'Course']);
-        $teeTimes = new TeeTimeModel();
-        $add      = static fn (string $nine, string $time) => (int) $teeTimes->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'nine' => $nine, 'tee_time' => $time]);
-        $f1 = $add('front', '16:00');
-        $f2 = $add('front', '16:02');
-        $b1 = $add('back', '16:01');
-        $b2 = $add('back', '16:30');
-
-        $this->asAdmin()->post('admin/groups/generate', ['league_id' => $leagueId]);
-
-        // 16:01 is closest to both; the second group gets the next closest unused one.
-        $this->seeInDatabase('league_groups', ['front_tee_time_id' => $f1, 'back_tee_time_id' => $b1]);
-        $this->seeInDatabase('league_groups', ['front_tee_time_id' => $f2, 'back_tee_time_id' => $b2]);
+        // A league with no registered players.
+        $emptyId = (new LeagueModel())->insert(['name' => 'Empty']);
+        $this->asAdmin()->post('admin/groups/generate', ['league_id' => $emptyId])->assertSessionHas('error');
     }
 
     public function testDeleteAllGroupsClearsScoresThatUseThem(): void
@@ -589,6 +577,61 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->seeInDatabase('league_groups', ['id' => $otherGroup]);
         $this->seeInDatabase('scores', ['player_id' => $playerId, 'group_id' => null]);
         $this->seeInDatabase('players', ['id' => $playerId]);
+    }
+
+    public function testGroupNineCanBeSetAndSwitchedForAllGroups(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
+        $otherId  = (new LeagueModel())->insert(['name' => 'Other']);
+
+        $this->asAdmin()->post('admin/groups', ['league_id' => $leagueId, 'group_number' => '1', 'nine' => 'back', 'active' => '1'])
+            ->assertRedirectTo('/admin/groups');
+        $this->asAdmin()->post('admin/groups', ['league_id' => $leagueId, 'group_number' => '2', 'nine' => 'front', 'active' => '1']);
+        $this->asAdmin()->post('admin/groups', ['league_id' => $otherId, 'group_number' => '1', 'nine' => 'front', 'active' => '1']);
+        $this->seeInDatabase('league_groups', ['league_id' => $leagueId, 'group_number' => 1, 'nine' => 'back']);
+
+        $this->asAdmin()->post('admin/groups', ['league_id' => $leagueId, 'group_number' => '3', 'nine' => 'middle', 'active' => '1'])
+            ->assertSee('flash-error');
+
+        $this->asAdmin()->post('admin/groups/switch-nine', ['league_id' => $leagueId])
+            ->assertSessionHas('message', '2 groups switched to the other nine.');
+        $this->seeInDatabase('league_groups', ['league_id' => $leagueId, 'group_number' => 1, 'nine' => 'front']);
+        $this->seeInDatabase('league_groups', ['league_id' => $leagueId, 'group_number' => 2, 'nine' => 'back']);
+        // Another league's groups are not touched.
+        $this->seeInDatabase('league_groups', ['league_id' => $otherId, 'group_number' => 1, 'nine' => 'front']);
+    }
+
+    public function testAddAllGroupsToARound(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
+        $courseId = (new CourseModel())->insert(['name' => 'Course']);
+        $roundId  = (new RoundModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-05-03']);
+        $players  = new PlayerModel();
+        $ann      = (int) $players->insert(['first_name' => 'Ann', 'last_name' => 'A']);
+        $bob      = (int) $players->insert(['first_name' => 'Bob', 'last_name' => 'B']);
+        $cy       = (int) $players->insert(['first_name' => 'Cy', 'last_name' => 'C']);
+        $gone     = (int) $players->insert(['first_name' => 'Di', 'last_name' => 'D', 'active' => 0]);
+        $db       = db_connect();
+        $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 1, 'nine' => 'front', 'player1_id' => $ann, 'player2_id' => $bob, 'active' => 1]);
+        $group1 = $db->insertID();
+        $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 2, 'nine' => 'back', 'player1_id' => $cy, 'player2_id' => $gone, 'active' => 1]);
+        $group2 = $db->insertID();
+        // Bob is already entered.
+        $db->table('scores')->insert(['league_id' => $leagueId, 'player_id' => $bob, 'round_id' => $roundId, 'playing' => 1]);
+
+        $this->asAdmin()->get("admin/rounds/{$roundId}/edit")->assertSee('Add all groups to this round');
+
+        $this->asAdmin()->post("admin/rounds/{$roundId}/add-groups")
+            ->assertSessionHas('message', '2 players from 2 groups added to this round. 1 were already in it.');
+
+        $this->seeInDatabase('scores', ['round_id' => $roundId, 'player_id' => $ann, 'group_id' => $group1, 'nine' => 'front', 'playing' => 1, 'paid' => 0]);
+        $this->seeInDatabase('scores', ['round_id' => $roundId, 'player_id' => $cy, 'group_id' => $group2, 'nine' => 'back']);
+        $this->dontSeeInDatabase('scores', ['round_id' => $roundId, 'player_id' => $gone]);
+        $this->assertSame(3, $db->table('scores')->where('round_id', $roundId)->countAllResults());
+
+        // Pressing it again adds nobody.
+        $this->asAdmin()->post("admin/rounds/{$roundId}/add-groups")
+            ->assertSessionHas('message', '0 players from 2 groups added to this round. 3 were already in it.');
     }
 
     public function testAdminCannotRemoveOwnAdminAccess(): void
