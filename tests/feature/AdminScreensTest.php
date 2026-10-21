@@ -147,13 +147,13 @@ final class AdminScreensTest extends CIUnitTestCase
         $courseId = (new CourseModel())->insert(['name' => 'Home Course']);
         $holes    = [];
         for ($n = 1; $n <= 18; $n++) {
-            $holes[$n] = ['white_yardage' => 300 + $n, 'white_par' => 4, 'white_handicap' => $n];
+            $holes[$n] = ['white_yardage' => 300 + $n, 'white_par' => 4, 'handicap' => $n, 'net' => $n + 1, 'adj' => -1];
         }
 
         $this->asAdmin()->post("admin/courses/{$courseId}/holes", ['holes' => $holes])
             ->assertRedirectTo("/admin/courses/{$courseId}/holes");
         $this->assertSame(18, (new HoleModel())->where('course_id', $courseId)->countAllResults());
-        $this->seeInDatabase('holes', ['course_id' => $courseId, 'number' => 12, 'nine' => 'back', 'white_yardage' => 312]);
+        $this->seeInDatabase('holes', ['course_id' => $courseId, 'number' => 12, 'nine' => 'back', 'white_yardage' => 312, 'handicap' => 12, 'net' => 13, 'adj' => -1]);
 
         // Front 9, back 9 and total rows add up yardage (301-318) and par (4 each).
         $html = $this->asAdmin()->get("admin/courses/{$courseId}/holes")->getBody();
@@ -164,6 +164,38 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->assertStringContainsString('<td data-total="white_par" data-range="all">72</td>', $html);
         // Tees with nothing entered stay blank.
         $this->assertStringContainsString('<td data-total="blue_yardage" data-range="all"></td>', $html);
+    }
+
+    public function testHoleHandicapsMustBeOneToEighteenAndNotRepeat(): void
+    {
+        $courseId = (new CourseModel())->insert(['name' => 'Home Course']);
+        $holes    = [];
+        for ($n = 1; $n <= 18; $n++) {
+            $holes[$n] = ['handicap' => $n];
+        }
+
+        // Out of range.
+        $bad      = $holes;
+        $bad[4]   = ['handicap' => 19];
+        $result   = $this->asAdmin()->post("admin/courses/{$courseId}/holes", ['holes' => $bad]);
+        $result->assertSee('Hole 4: Hcp must be from 1 to 18.');
+
+        // The same handicap on two holes names both holes, and nothing is saved.
+        $dupe    = $holes;
+        $dupe[2] = ['handicap' => 7];
+        $result  = $this->asAdmin()->post("admin/courses/{$courseId}/holes", ['holes' => $dupe]);
+        $result->assertSee('Hole 2: Hcp 7 is also used on hole 7.');
+        $result->assertSee('Hole 7: Hcp 7 is also used on hole 2.');
+        $this->assertSame(0, (new HoleModel())->where('course_id', $courseId)->countAllResults());
+
+        // Saved, then two holes swap handicaps in one save.
+        $this->asAdmin()->post("admin/courses/{$courseId}/holes", ['holes' => $holes])->assertSessionHas('message');
+        $swap    = $holes;
+        $swap[1] = ['handicap' => 2];
+        $swap[2] = ['handicap' => 1];
+        $this->asAdmin()->post("admin/courses/{$courseId}/holes", ['holes' => $swap])->assertSessionHas('message');
+        $this->seeInDatabase('holes', ['course_id' => $courseId, 'number' => 1, 'handicap' => 2]);
+        $this->seeInDatabase('holes', ['course_id' => $courseId, 'number' => 2, 'handicap' => 1]);
     }
 
     public function testShiftTeeTimes(): void

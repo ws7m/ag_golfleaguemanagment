@@ -65,14 +65,15 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
   - Front or Back
   - Blue yardage
   - Blue par
-  - Blue handicap
   - White yardage
   - White par
-  - White handicap
   - Red yardage
   - Red par
-  - Red handicap
+  - Hcp - Hole handicap, 1 to 18; one per hole (not per tee), each number used on only one hole of the course
+  - Net - One per hole
+  - Adj - One per hole
   - Image
+- The holes edit page shows yardage and par for each tee, then Hcp, Net and Adj, with front 9, back 9 and total rows for yardage and par.
 
 ### 2.4 Players
 - As admin, I want to be able to create/update/delete players

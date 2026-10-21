@@ -1,7 +1,7 @@
 <?= $this->extend('layouts/main') ?>
 <?= $this->section('content') ?>
 <h1>Holes: <?= esc($course['name']) ?></h1>
-<p class="muted">Yardage, par and hole handicap (1–18) for each tee. Leave a box blank if it doesn't apply.</p>
+<p class="muted">Yardage and par for each tee, then the hole's handicap (Hcp, 1–18, each number used once), Net and Adj. Leave a box blank if it doesn't apply.</p>
 
 <?php if ($errors !== []): ?>
     <div class="flash flash-error" role="alert">
@@ -17,19 +17,23 @@
             <tr>
                 <th rowspan="2">Hole</th>
                 <?php foreach (\App\Controllers\Admin\Holes::TEES as $tee): ?>
-                    <th colspan="3" class="tee-<?= $tee ?>"><?= ucfirst($tee) ?></th>
+                    <th colspan="2" class="tee-<?= $tee ?>"><?= ucfirst($tee) ?></th>
+                <?php endforeach ?>
+                <?php foreach (\App\Controllers\Admin\Holes::HOLE_FIELDS as $label): ?>
+                    <th rowspan="2"><?= $label ?></th>
                 <?php endforeach ?>
             </tr>
             <tr>
                 <?php foreach (\App\Controllers\Admin\Holes::TEES as $tee): ?>
-                    <th>Yds</th><th>Par</th><th>Hcp</th>
+                    <th>Yds</th><th>Par</th>
                 <?php endforeach ?>
             </tr>
             </thead>
             <tbody>
             <?php
             $tees  = \App\Controllers\Admin\Holes::TEES;
-            $stats = \App\Controllers\Admin\Holes::STATS;
+            $stats      = \App\Controllers\Admin\Holes::STATS;
+            $holeFields = \App\Controllers\Admin\Holes::HOLE_FIELDS;
             // Sum of yardage or par over a range of holes; blank when nothing is entered.
             $total = static function (int $from, int $to, string $key) use ($holes): string {
                 $sum = 0;
@@ -44,18 +48,16 @@
 
                 return $any ? (string) $sum : '';
             };
-            // A totals row: yardage and par are summed, hole handicap is not.
-            $totalsRow = static function (string $label, string $range, int $from, int $to) use ($tees, $stats, $total): string {
+            // A totals row: yardage and par for each tee; Hcp, Net and Adj aren't totalled.
+            $totalsRow = static function (string $label, string $range, int $from, int $to) use ($tees, $stats, $holeFields, $total): string {
                 $html = '<tr class="totals totals-' . $range . '"><th>' . $label . '</th>';
                 foreach ($tees as $tee) {
                     foreach ($stats as $stat) {
-                        $html .= $stat === 'handicap'
-                            ? '<td></td>'
-                            : '<td data-total="' . $tee . '_' . $stat . '" data-range="' . $range . '">' . $total($from, $to, "{$tee}_{$stat}") . '</td>';
+                        $html .= '<td data-total="' . $tee . '_' . $stat . '" data-range="' . $range . '">' . $total($from, $to, "{$tee}_{$stat}") . '</td>';
                     }
                 }
 
-                return $html . '</tr>';
+                return $html . str_repeat('<td></td>', count($holeFields)) . '</tr>';
             };
             ?>
             <?php for ($n = 1; $n <= 18; $n++): ?>
@@ -70,6 +72,13 @@
                                        aria-label="Hole <?= $n ?> <?= $tee ?> <?= $stat ?>"
                                        value="<?= esc((string) ($holes[$n]["{$tee}_{$stat}"] ?? ''), 'attr') ?>"></td>
                         <?php endforeach ?>
+                    <?php endforeach ?>
+                    <?php foreach ($holeFields as $key => $label): ?>
+                        <td><input type="number" inputmode="numeric" class="cell"
+                                   name="holes[<?= $n ?>][<?= $key ?>]"
+                                   <?= $key === 'handicap' ? 'min="1" max="18" step="1"' : 'step="1"' ?>
+                                   aria-label="Hole <?= $n ?> <?= $label ?>"
+                                   value="<?= esc((string) ($holes[$n][$key] ?? ''), 'attr') ?>"></td>
                     <?php endforeach ?>
                 </tr>
                 <?php if ($n === 9): ?><?= $totalsRow('Front 9', 'front', 1, 9) ?><?php endif ?>
