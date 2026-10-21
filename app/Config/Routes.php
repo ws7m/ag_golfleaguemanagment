@@ -41,6 +41,7 @@ $routes->group('admin', ['filter' => 'adminauth', 'namespace' => 'App\Controller
     }
 
     $routes->get('leagues/(:num)/copy', 'Leagues::copy/$1');
+    $routes->post('players/add-test', 'Players::addTestPlayers'); // TEMPORARY test data helper
     $routes->post('rounds/generate', 'Rounds::generate');
     $routes->post('rounds/delete-all', 'Rounds::deleteAll');
     $routes->post('rounds/(:num)/add-groups', 'Rounds::addGroups/$1');

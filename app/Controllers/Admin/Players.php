@@ -26,6 +26,11 @@ class Players extends CrudController
         'winnings' => 'Winnings (most first)',
     ];
 
+    // TEMPORARY: the "Add test players" panel, for trying out groups and
+    // rounds. Remove with addTestPlayers(), its route and its view.
+    protected ?string $extraIndexView = 'admin/players/add_test';
+    protected array $headActions      = ['Add test players' => '#add-test-players'];
+
     protected function listFields(): array
     {
         return [
@@ -143,6 +148,48 @@ class Players extends CrudController
         }
 
         return array_map('intval', array_column($query->get()->getResultArray(), 'total', 'player_id'));
+    }
+
+    /**
+     * TEMPORARY test data helper, to be removed later.
+     *
+     * Adds a number of players named Player1 / 1, Player2 / 2, and so on,
+     * continuing after the highest PlayerN already saved. Each gets the login
+     * and password playerN, and is registered in the chosen league.
+     */
+    public function addTestPlayers()
+    {
+        $leagueId = (int) $this->request->getPost('league_id');
+        $count    = (int) $this->request->getPost('count');
+        $back     = redirect()->to($this->baseRoute . '?league_id=' . $leagueId);
+        if ($leagueId <= 0 || $count < 1 || $count > 100) {
+            return $back->with('error', 'Choose a league and a number of players from 1 to 100.');
+        }
+
+        $players = new PlayerModel();
+        $highest = 0;
+        foreach ($players->like('last_name', 'Player', 'after')->findAll() as $player) {
+            if (preg_match('/^Player(\d+)$/', $player['last_name'], $m)) {
+                $highest = max($highest, (int) $m[1]);
+            }
+        }
+
+        $db = db_connect();
+        $db->transStart();
+        for ($n = $highest + 1; $n <= $highest + $count; $n++) {
+            $id = $players->insert([
+                'first_name' => (string) $n,
+                'last_name'  => "Player{$n}",
+                'login'      => "player{$n}",
+                'league_id'  => $leagueId,
+                'is_player'  => 1,
+                'active'     => 1,
+            ]);
+            $players->setPassword((int) $id, "player{$n}");
+        }
+        $db->transComplete();
+
+        return $back->with('message', "{$count} test players added (Player" . ($highest + 1) . ' to Player' . ($highest + $count) . '). Each logs in with playerN / playerN.');
     }
 
     /**

@@ -634,6 +634,24 @@ final class AdminScreensTest extends CIUnitTestCase
             ->assertSessionHas('message', '0 players from 2 groups added to this round. 3 were already in it.');
     }
 
+    // TEMPORARY: remove with the "Add test players" helper.
+    public function testAddTestPlayers(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
+        $players  = new PlayerModel();
+        $players->insert(['first_name' => '2', 'last_name' => 'Player2', 'login' => 'player2']);
+
+        // Numbering continues after the highest existing PlayerN.
+        $this->asAdmin()->post('admin/players/add-test', ['league_id' => $leagueId, 'count' => '3'])
+            ->assertSessionHas('message', '3 test players added (Player3 to Player5). Each logs in with playerN / playerN.');
+
+        $this->seeInDatabase('players', ['last_name' => 'Player3', 'first_name' => '3', 'login' => 'player3', 'league_id' => $leagueId, 'is_player' => 1]);
+        $this->seeInDatabase('players', ['last_name' => 'Player5', 'first_name' => '5', 'login' => 'player5']);
+        $this->assertNotNull($players->verifyLogin('player4', 'player4'));
+
+        $this->asAdmin()->post('admin/players/add-test', ['league_id' => $leagueId, 'count' => '0'])->assertSessionHas('error');
+    }
+
     public function testAdminCannotRemoveOwnAdminAccess(): void
     {
         $result = $this->asAdmin()->post("admin/players/{$this->adminId}", [
