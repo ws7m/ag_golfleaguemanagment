@@ -13,7 +13,7 @@ final class CourseCsvTest extends CIUnitTestCase
         return [
             'id' => 7, 'name' => 'Southridge Golf Course', 'description' => "Nine holes, \"friendly\", fast greens",
             'address' => '5750 S Lemay Ave', 'city' => 'Fort Collins', 'state' => 'CO', 'zip' => '80525',
-            'phone' => '970-226-2828', 'email' => null, 'image' => null, 'rating' => '33.2',
+            'phone' => '970-226-2828', 'email' => null, 'website' => 'https://www.example.com/golf', 'image' => null, 'rating' => '33.2',
             'front_slope' => '113', 'back_slope' => '115', 'active' => '1',
         ];
     }
@@ -41,6 +41,8 @@ final class CourseCsvTest extends CIUnitTestCase
         $this->assertSame('name,"Southridge Golf Course"', $lines[1]);
         $this->assertContains('description,"Nine holes, ""friendly"", fast greens"', $lines);
         $this->assertContains('rating,33.2', $lines);
+        $this->assertContains('website,https://www.example.com/golf', $lines);
+        $this->assertSame('email,', $lines[array_search('website,https://www.example.com/golf', $lines, true) - 1], 'Website comes after email');
         $this->assertNotContains('id,7', $lines, 'The database id is not exported');
 
         $header = array_search('number,blue_yardage,blue_par,white_yardage,white_par,red_yardage,red_par,handicap,net,adj,image', $lines, true);
@@ -58,6 +60,7 @@ final class CourseCsvTest extends CIUnitTestCase
         $this->assertSame('Southridge Golf Course', $parsed['course']['name']);
         $this->assertSame('Nine holes, "friendly", fast greens', $parsed['course']['description']);
         $this->assertNull($parsed['course']['email']);
+        $this->assertSame('https://www.example.com/golf', $parsed['course']['website']);
         $this->assertSame([1, 2], array_keys($parsed['holes']));
         $this->assertSame('291', $parsed['holes'][1]['white_yardage']);
         $this->assertSame('-1', $parsed['holes'][2]['adj']);

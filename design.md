@@ -50,6 +50,7 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
   - Zip
   - Phone
   - Email
+  - Website
   - Image
   - Rating
   - Front slope

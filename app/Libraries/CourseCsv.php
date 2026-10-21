@@ -18,7 +18,7 @@ class CourseCsv
 {
     /** Course fields written to and read from the file, in order. */
     public const COURSE_FIELDS = [
-        'name', 'description', 'address', 'city', 'state', 'zip', 'phone', 'email', 'image',
+        'name', 'description', 'address', 'city', 'state', 'zip', 'phone', 'email', 'website', 'image',
         'rating', 'front_slope', 'back_slope', 'active',
     ];
 

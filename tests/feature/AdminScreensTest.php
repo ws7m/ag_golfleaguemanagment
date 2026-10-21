@@ -168,7 +168,7 @@ final class AdminScreensTest extends CIUnitTestCase
 
     public function testExportCourseAsCsv(): void
     {
-        $courseId = (new CourseModel())->insert(['name' => 'Home Course', 'city' => 'Fort Collins', 'front_slope' => 113]);
+        $courseId = (new CourseModel())->insert(['name' => 'Home Course', 'city' => 'Fort Collins', 'website' => 'https://golf.example.com', 'front_slope' => 113]);
         (new HoleModel())->insert(['course_id' => $courseId, 'number' => 1, 'nine' => 'front', 'white_par' => 4, 'handicap' => 5]);
 
         $this->asAdmin()->get('admin/courses')->assertSee("admin/courses/{$courseId}/export");
@@ -179,11 +179,26 @@ final class AdminScreensTest extends CIUnitTestCase
         $result->assertHeader('Content-Disposition', 'attachment; filename="course-home-course.csv"');
         $csv = $result->getBody();
         $this->assertStringContainsString('city,"Fort Collins"', $csv);
+        $this->assertStringContainsString("website,https://golf.example.com\n", $csv);
         $this->assertStringContainsString("front_slope,113\n", $csv);
         $this->assertStringContainsString("\n1,,,,4,,,5,,,\n", $csv);
 
         // The import form is on the course's edit page.
         $this->asAdmin()->get("admin/courses/{$courseId}/edit")->assertSee("admin/courses/{$courseId}/import");
+    }
+
+    public function testCourseWebsiteIsSavedAndChecked(): void
+    {
+        $this->asAdmin()->get('admin/courses/new')->assertSee('name="website"');
+
+        $result = $this->asAdmin()->post('admin/courses', ['name' => 'Bad Site', 'website' => 'not a web address', 'active' => '1']);
+        $result->assertOK();
+        $result->assertSee('flash-error');
+        $this->dontSeeInDatabase('courses', ['name' => 'Bad Site']);
+
+        $this->asAdmin()->post('admin/courses', ['name' => 'Good Site', 'website' => 'https://www.southridgegolf.com', 'active' => '1'])
+            ->assertRedirectTo('/admin/courses');
+        $this->seeInDatabase('courses', ['name' => 'Good Site', 'website' => 'https://www.southridgegolf.com']);
     }
 
     public function testHoleHandicapsMustBeOneToEighteenAndNotRepeat(): void

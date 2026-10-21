@@ -31,6 +31,7 @@ class Courses extends CrudController
             'zip'         => ['label' => 'Zip'],
             'phone'       => ['label' => 'Phone'],
             'email'       => ['label' => 'Email', 'type' => 'email'],
+            'website'     => ['label' => 'Website', 'type' => 'url', 'help' => 'Full address, e.g. https://www.southridgegolf.com'],
             'image'       => ['label' => 'Image', 'help' => 'Picture uploads come later; for now a file name or link.'],
             'rating'      => ['label' => 'Rating', 'type' => 'decimal', 'compact' => true],
             'front_slope' => ['label' => 'Front slope', 'type' => 'number', 'compact' => true],
