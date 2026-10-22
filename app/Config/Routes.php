@@ -53,7 +53,6 @@ $routes->group('admin', ['filter' => 'adminauth', 'namespace' => 'App\Controller
     $routes->post('tee-times/shift', 'TeeTimes::shift');
     $routes->post('tee-times/generate', 'TeeTimes::generate');
     $routes->post('tee-times/delete-all', 'TeeTimes::deleteAll');
-    $routes->post('groups/generate', 'Groups::generate');
     $routes->post('groups/switch-nine', 'Groups::switchNine');
     $routes->post('groups/(:num)/switch-nine', 'Groups::switchGroupNine/$1');
     $routes->post('groups/delete-all', 'Groups::deleteAll');

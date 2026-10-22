@@ -23,21 +23,6 @@ $leagueOptions = static function (string $id) use ($fields, $filterValues): stri
     </form>
 </section>
 
-<section class="panel" id="create-groups">
-    <h2>Create groups for registered players</h2>
-    <p class="muted">Puts every registered player who isn't in a group yet into a group of
-        <?= \App\Controllers\Admin\Groups::PLAYERS_PER_GROUP ?>, in last name order. Open places in existing groups are
-        filled first, then new groups are created (the last may have fewer players). New groups start on the front nine and get
-        the front and back nine tee times in time order; when the tee times run out they start again from the first one.</p>
-    <form method="post" action="<?= site_url('admin/groups/generate') ?>" class="form inline"
-          onsubmit="return confirm('Put every registered player who is not in a group into a group of 4?')">
-        <?= csrf_field() ?>
-        <label for="gen_group_league">League</label>
-        <?= $leagueOptions('gen_group_league') ?>
-        <button type="submit">Create groups</button>
-    </form>
-</section>
-
 <section class="panel panel-danger" id="delete-groups">
     <h2>Delete all groups</h2>
     <p class="muted">Removes every group in the league so you can start over. Scores that recorded one of these groups as the
