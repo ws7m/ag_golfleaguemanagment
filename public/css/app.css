@@ -172,4 +172,4 @@ table.holes .totals-all th, table.holes .totals-all td { border-top: 2px solid v
 .tt-preview .tt-heading { font-size: 1.1rem; margin: 0 0 0.75rem; color: #000; }
 .tt-preview .tt-lines { width: 100%; }
 .tt-preview .tt-lines td { color: #000; border-bottom: 1px solid #ddd; padding: 0.3rem 0.4rem 0.3rem 0; white-space: normal; vertical-align: top; }
-.tt-preview .tt-time { font-weight: 700; width: 4rem; white-space: nowrap; }
+.tt-preview .tt-lines .tt-time { font-weight: 700; width: 8rem; white-space: nowrap; }

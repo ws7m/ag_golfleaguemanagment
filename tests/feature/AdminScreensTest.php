@@ -350,8 +350,8 @@ final class AdminScreensTest extends CIUnitTestCase
         // One line per tee time, earliest first: time, then "First Last, First Last".
         // Group 3 plays the back nine, so its front time (15:00) isn't shown;
         // inactive group 4 isn't listed.
-        $this->assertStringContainsString('Monday League - Tee time list - Front - 5/4/2027 16:00 Cy Cole 16:10 Ann Ames, Bob Baker', $text);
-        $this->assertStringContainsString('Monday League - Tee time list - Back - 5/4/2027 16:02', $text);
+        $this->assertStringContainsString('Monday League - Tee time list - Front - 5/4/2027 16:00 (4:00 PM) Cy Cole 16:10 (4:10 PM) Ann Ames, Bob Baker', $text);
+        $this->assertStringContainsString('Monday League - Tee time list - Back - 5/4/2027 16:02 (4:02 PM)', $text);
         $this->assertStringContainsString('TeeTimeList-Front-5-4-2027.pdf', $text);
         $this->assertStringNotContainsString('15:00', $text);
         $this->assertStringNotContainsString('15:30', $text);
@@ -370,6 +370,16 @@ final class AdminScreensTest extends CIUnitTestCase
         // response()->getBody(): the test response's own getBody() returns the
         // body after an HTML parser has read it, which mangles a PDF.
         $this->assertStringStartsWith('%PDF-', $result->response()->getBody());
+    }
+
+    public function testTeeTimeLabelAddsAmPm(): void
+    {
+        helper('display');
+        $this->assertSame('16:00 (4:00 PM)', tee_time_label('16:00'));
+        $this->assertSame('09:30 (9:30 AM)', tee_time_label('09:30'));
+        $this->assertSame('12:05 (12:05 PM)', tee_time_label('12:05'));
+        $this->assertSame('00:15 (12:15 AM)', tee_time_label('00:15'));
+        $this->assertSame('', tee_time_label(null));
     }
 
     public function testTeeTimeListFileNamesAreSafe(): void

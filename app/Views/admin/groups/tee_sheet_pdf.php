@@ -9,7 +9,7 @@
         .tt-heading { font-size: 16pt; margin: 0 0 12pt; }
         .tt-lines { width: 100%; border-collapse: collapse; }
         .tt-lines td { padding: 3pt 0; border-bottom: 0.5pt solid #ccc; vertical-align: top; }
-        .tt-time { width: 0.9in; font-weight: bold; white-space: nowrap; }
+        .tt-time { width: 1.5in; font-weight: bold; white-space: nowrap; }
     </style>
 </head>
 <body>

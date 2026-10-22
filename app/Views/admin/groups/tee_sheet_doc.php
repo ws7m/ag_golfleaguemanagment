@@ -15,7 +15,7 @@
         <table class="tt-lines">
             <?php foreach ($rows as $row): ?>
                 <tr>
-                    <td class="tt-time"><?= esc($row['time'] ?? '—') ?></td>
+                    <td class="tt-time"><?= esc($row['time'] === null ? '—' : tee_time_label($row['time'])) ?></td>
                     <td class="tt-players"><?= esc(implode(', ', array_filter($row['players']))) ?></td>
                 </tr>
             <?php endforeach ?>

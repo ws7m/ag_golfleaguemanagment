@@ -15,6 +15,22 @@ if (! function_exists('money')) {
     }
 }
 
+if (! function_exists('tee_time_label')) {
+    /**
+     * A 24-hour "HH:MM" time with its AM/PM version, e.g. "16:00 (4:00 PM)".
+     * Anything that isn't HH:MM is returned as it is.
+     */
+    function tee_time_label(?string $time): string
+    {
+        if ($time === null || ! preg_match('/^([01]\d|2[0-3]):([0-5]\d)$/', $time, $m)) {
+            return (string) $time;
+        }
+        $hour = (int) $m[1];
+
+        return sprintf('%s (%d:%s %s)', $time, $hour % 12 === 0 ? 12 : $hour % 12, $m[2], $hour < 12 ? 'AM' : 'PM');
+    }
+}
+
 if (! function_exists('field_display')) {
     /**
      * A stored value as text for a list page.
