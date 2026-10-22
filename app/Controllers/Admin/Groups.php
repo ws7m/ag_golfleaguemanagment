@@ -262,8 +262,8 @@ class Groups extends CrudController
 
     /**
      * The active groups playing one nine, in ascending tee time order (groups
-     * without a time last, then by group number), each with its players'
-     * names as "First Last".
+     * without a time last, then by group number), each with its first four
+     * player places as "First Last", or "Open" where no player is set.
      *
      * @return list<array{time: ?string, number: int, players: list<string>}>
      */
@@ -288,10 +288,15 @@ class Groups extends CrudController
 
         $rows = [];
         foreach ($groups as $group) {
+            $players = [];
+            for ($i = 1; $i <= self::PLAYERS_PER_GROUP; $i++) {
+                $playerId  = (int) ($group["player{$i}_id"] ?? 0);
+                $players[] = $names[$playerId] ?? 'Open';
+            }
             $rows[] = [
                 'time'    => $group["{$nine}_tee_time"],
                 'number'  => (int) $group['group_number'],
-                'players' => array_map(static fn ($id) => $names[$id] ?? '', LeagueGroupModel::playerIds($group)),
+                'players' => $players,
             ];
         }
         usort($rows, static fn ($a, $b) => [$a['time'] === null, $a['time'], $a['number']] <=> [$b['time'] === null, $b['time'], $b['number']]);

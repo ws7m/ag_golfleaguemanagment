@@ -335,7 +335,8 @@ final class AdminScreensTest extends CIUnitTestCase
         $bob      = $players->insert(['first_name' => 'Bob', 'last_name' => 'Baker', 'league_id' => $leagueId]);
         $cy       = $players->insert(['first_name' => 'Cy', 'last_name' => 'Cole', 'league_id' => $leagueId]);
         $groups   = db_connect()->table('league_groups');
-        $groups->insert(['league_id' => $leagueId, 'group_number' => 1, 'nine' => 'front', 'front_tee_time' => '16:10', 'back_tee_time' => '16:40', 'player1_id' => $ann, 'player2_id' => $bob, 'active' => 1]);
+        // Group 1 has players in places 1 and 3, so places 2 and 4 are open.
+        $groups->insert(['league_id' => $leagueId, 'group_number' => 1, 'nine' => 'front', 'front_tee_time' => '16:10', 'back_tee_time' => '16:40', 'player1_id' => $ann, 'player3_id' => $bob, 'active' => 1]);
         $groups->insert(['league_id' => $leagueId, 'group_number' => 2, 'nine' => 'front', 'front_tee_time' => '16:00', 'player1_id' => $cy, 'active' => 1]);
         $groups->insert(['league_id' => $leagueId, 'group_number' => 3, 'nine' => 'back', 'front_tee_time' => '15:00', 'back_tee_time' => '16:02', 'active' => 1]);
         $groups->insert(['league_id' => $leagueId, 'group_number' => 4, 'nine' => 'front', 'front_tee_time' => '15:30', 'active' => 0]);
@@ -347,11 +348,12 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->assertStringContainsString('type="date" id="sheet_date" name="date" value="2027-05-04"', $html);
         $text = trim((string) preg_replace('/\s+/', ' ', preg_replace('/<[^>]+>/', ' ', $html)));
 
-        // One line per tee time, earliest first: time, then "First Last, First Last".
+        // One line per tee time, earliest first: time, then four places as
+        // "First Last", with "Open" for a place without a player.
         // Group 3 plays the back nine, so its front time (15:00) isn't shown;
         // inactive group 4 isn't listed.
-        $this->assertStringContainsString('Monday League - Tee time list - Front - 5/4/2027 16:00 (4:00 PM) Cy Cole 16:10 (4:10 PM) Ann Ames, Bob Baker', $text);
-        $this->assertStringContainsString('Monday League - Tee time list - Back - 5/4/2027 16:02 (4:02 PM)', $text);
+        $this->assertStringContainsString('Monday League - Tee time list - Front - 5/4/2027 16:00 (4:00 PM) Cy Cole, Open, Open, Open 16:10 (4:10 PM) Ann Ames, Open, Bob Baker, Open', $text);
+        $this->assertStringContainsString('Monday League - Tee time list - Back - 5/4/2027 16:02 (4:02 PM) Open, Open, Open, Open', $text);
         $this->assertStringContainsString('TeeTimeList-Front-5-4-2027.pdf', $text);
         $this->assertStringNotContainsString('15:00', $text);
         $this->assertStringNotContainsString('15:30', $text);
