@@ -12,6 +12,10 @@ class Leagues extends CrudController
     protected string $baseRoute  = 'admin/leagues';
     protected array $listColumns = ['name', 'start_date', 'end_date', 'active'];
     protected array $orderBy     = ['start_date' => 'DESC', 'id' => 'DESC'];
+    protected ?string $extraFormView = 'admin/leagues/reset';
+
+    // What has to be typed to confirm a reset.
+    public const RESET_CONFIRMATION = 'RESET';
 
     protected function fields(): array
     {
@@ -30,6 +34,77 @@ class Leagues extends CrudController
     protected function rowActions(): array
     {
         return ['Copy' => 'admin/leagues/{id}/copy'];
+    }
+
+    /**
+     * Resets a league's data for testing: deletes its scores, groups,
+     * rounds, tee times and registered players. The league itself, games,
+     * courses and holes are kept. Players who are admins (or the logged-in
+     * user), or who have scores or groups in another league, are kept too.
+     */
+    public function reset(int $id)
+    {
+        $league = $this->findOr404($id);
+        $back   = redirect()->to("{$this->baseRoute}/{$id}/edit");
+        if (trim((string) $this->request->getPost('confirm')) !== self::RESET_CONFIRMATION) {
+            return $back->with('error', 'Nothing was deleted. Type ' . self::RESET_CONFIRMATION . ' in the box to confirm.');
+        }
+
+        $db      = db_connect();
+        $counts  = [];
+        $deleted = static function (string $table, array $where) use ($db): int {
+            $db->table($table)->where($where)->delete();
+
+            return $db->affectedRows();
+        };
+
+        $db->transStart();
+
+        $counts['scores'] = $deleted('scores', ['league_id' => $id]);
+        $counts['groups'] = $deleted('league_groups', ['league_id' => $id]);
+        $counts['rounds'] = $deleted('rounds', ['league_id' => $id]);
+        $counts['tee times'] = $deleted('tee_times', ['league_id' => $id]);
+
+        // Players registered in this league, except admins, the logged-in
+        // user, and anyone still used by another league's scores or groups.
+        $usedElsewhere = array_map('intval', array_column(
+            $db->table('scores')->select('player_id')->distinct()->get()->getResultArray(),
+            'player_id'
+        ));
+        foreach ($db->table('league_groups')->get()->getResultArray() as $group) {
+            for ($i = 1; $i <= 6; $i++) {
+                if (! empty($group["player{$i}_id"])) {
+                    $usedElsewhere[] = (int) $group["player{$i}_id"];
+                }
+            }
+        }
+        $kept    = 0;
+        $players = [];
+        foreach ($db->table('players')->where('league_id', $id)->get()->getResultArray() as $player) {
+            $playerId = (int) $player['id'];
+            if ($player['is_admin'] || $playerId === (int) session('admin_id') || in_array($playerId, $usedElsewhere, true)) {
+                $kept++;
+            } else {
+                $players[] = $playerId;
+            }
+        }
+        if ($players !== []) {
+            $db->table('players')->whereIn('id', $players)->delete();
+        }
+        $counts['players'] = count($players);
+
+        $db->transComplete();
+
+        $parts = [];
+        foreach ($counts as $what => $count) {
+            $parts[] = "{$count} {$what}";
+        }
+        $message = "{$league['name']} was reset: deleted " . implode(', ', $parts) . '.';
+        if ($kept > 0) {
+            $message .= " {$kept} players were kept (admins, or players used in another league).";
+        }
+
+        return $back->with('message', $message . ' Courses, holes and games were not changed.');
     }
 
     /**

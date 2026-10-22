@@ -798,6 +798,48 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->assertSame(3, $db->table('scores')->where('league_id', $otherId)->countAllResults());
     }
 
+    public function testResetLeagueDeletesItsDataButKeepsCoursesHolesAndGames(): void
+    {
+        $db       = db_connect();
+        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
+        $otherId  = (new LeagueModel())->insert(['name' => 'Other']);
+        $courseId = (new CourseModel())->insert(['name' => 'Course']);
+        (new HoleModel())->insert(['course_id' => $courseId, 'number' => 1, 'nine' => 'front', 'white_par' => 4]);
+        $gameId   = (new \App\Models\GameModel())->insert(['league_id' => $leagueId, 'name' => 'Stroke play']);
+        $teeTime  = (new TeeTimeModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'front', 'tee_time' => '16:00']);
+        $roundId  = (new RoundModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'game_id' => $gameId, 'round_date' => '2027-05-03']);
+        $players  = new PlayerModel();
+        $plain    = (int) $players->insert(['first_name' => 'Ann', 'last_name' => 'A', 'league_id' => $leagueId]);
+        $admin    = (int) $players->insert(['first_name' => 'Bo', 'last_name' => 'B', 'league_id' => $leagueId, 'is_admin' => 1]);
+        $shared   = (int) $players->insert(['first_name' => 'Cy', 'last_name' => 'C', 'league_id' => $leagueId]);
+        $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 1, 'front_tee_time_id' => $teeTime, 'player1_id' => $plain, 'active' => 1]);
+        $db->table('scores')->insert(['league_id' => $leagueId, 'player_id' => $plain, 'round_id' => $roundId]);
+        // Cy also plays in the other league, so is kept.
+        $otherRound = (new RoundModel())->insert(['league_id' => $otherId, 'course_id' => $courseId, 'round_date' => '2027-05-03']);
+        $db->table('scores')->insert(['league_id' => $otherId, 'player_id' => $shared, 'round_id' => $otherRound]);
+
+        $this->asAdmin()->get("admin/leagues/{$leagueId}/edit")->assertSee('Reset league data');
+
+        // Without typing RESET nothing happens.
+        $this->asAdmin()->post("admin/leagues/{$leagueId}/reset", ['confirm' => 'yes'])->assertSessionHas('error');
+        $this->seeInDatabase('rounds', ['id' => $roundId]);
+
+        $this->asAdmin()->post("admin/leagues/{$leagueId}/reset", ['confirm' => 'RESET'])
+            ->assertSessionHas('message', 'League was reset: deleted 1 scores, 1 groups, 1 rounds, 1 tee times, 1 players. 2 players were kept (admins, or players used in another league). Courses, holes and games were not changed.');
+
+        foreach (['scores', 'league_groups', 'rounds', 'tee_times'] as $table) {
+            $this->assertSame(0, $db->table($table)->where('league_id', $leagueId)->countAllResults(), "{$table} left behind");
+        }
+        $this->dontSeeInDatabase('players', ['id' => $plain]);
+        $this->seeInDatabase('players', ['id' => $admin]);
+        $this->seeInDatabase('players', ['id' => $shared]);
+        $this->seeInDatabase('leagues', ['id' => $leagueId]);
+        $this->seeInDatabase('courses', ['id' => $courseId]);
+        $this->seeInDatabase('holes', ['course_id' => $courseId]);
+        $this->seeInDatabase('games', ['id' => $gameId]);
+        $this->seeInDatabase('rounds', ['id' => $otherRound]);
+    }
+
     public function testAdminCannotRemoveOwnAdminAccess(): void
     {
         $result = $this->asAdmin()->post("admin/players/{$this->adminId}", [
