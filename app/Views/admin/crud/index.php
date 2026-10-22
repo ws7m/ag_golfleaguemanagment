@@ -36,7 +36,7 @@
 <?php if ($rows === []): ?>
     <p class="muted">No <?= esc(strtolower($title)) ?> yet.</p>
 <?php else: ?>
-    <?php $editColumn = $editLinkColumn === null || $actions !== []; ?>
+    <?php $editColumn = $editLinkColumn === null || $actions !== [] || $postActions !== []; ?>
     <div class="table-wrap">
         <table>
             <thead>
@@ -62,6 +62,12 @@
                             <a href="<?= site_url("{$baseRoute}/{$row['id']}/edit") ?>">Edit</a>
                             <?php foreach ($actions as $label => $route): ?>
                                 <a href="<?= site_url(str_replace('{id}', (string) $row['id'], $route)) ?>"><?= esc($label) ?></a>
+                            <?php endforeach ?>
+                            <?php foreach ($postActions as $label => $route): ?>
+                                <form method="post" action="<?= site_url(str_replace('{id}', (string) $row['id'], $route)) ?>" class="row-form">
+                                    <?= csrf_field() ?>
+                                    <button type="submit" class="link-button"><?= esc($label) ?></button>
+                                </form>
                             <?php endforeach ?>
                         </td>
                     <?php endif ?>

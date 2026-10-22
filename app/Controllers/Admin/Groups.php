@@ -163,6 +163,25 @@ class Groups extends CrudController
         return $back->with('message', $message);
     }
 
+    protected function rowPostActions(): array
+    {
+        return ['Switch nine' => 'admin/groups/{id}/switch-nine'];
+    }
+
+    /**
+     * Switches one group to the other nine: front becomes back, and back
+     * becomes front.
+     */
+    public function switchGroupNine(int $id)
+    {
+        $group = $this->findOr404($id);
+        $nine  = $group['nine'] === 'front' ? 'back' : 'front';
+        (new LeagueGroupModel())->update($id, ['nine' => $nine]);
+
+        return redirect()->to($this->baseRoute . '?league_id=' . $group['league_id'])
+            ->with('message', "Group {$group['group_number']} now plays the {$nine} nine.");
+    }
+
     /**
      * Switches every group in a league to the other nine: front becomes back
      * and back becomes front.

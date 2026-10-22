@@ -649,6 +649,27 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->seeInDatabase('league_groups', ['league_id' => $otherId, 'group_number' => 1, 'nine' => 'front']);
     }
 
+    public function testSwitchOneGroupsNineFromTheList(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
+        $db       = db_connect();
+        $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 1, 'nine' => 'front', 'active' => 1]);
+        $one = $db->insertID();
+        $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 2, 'nine' => 'front', 'active' => 1]);
+        $two = $db->insertID();
+
+        $this->asAdmin()->get("admin/groups?league_id={$leagueId}")->assertSee("admin/groups/{$one}/switch-nine");
+
+        $this->asAdmin()->post("admin/groups/{$one}/switch-nine")
+            ->assertSessionHas('message', 'Group 1 now plays the back nine.');
+        $this->seeInDatabase('league_groups', ['id' => $one, 'nine' => 'back']);
+        $this->seeInDatabase('league_groups', ['id' => $two, 'nine' => 'front']);
+
+        $this->asAdmin()->post("admin/groups/{$one}/switch-nine")
+            ->assertSessionHas('message', 'Group 1 now plays the front nine.');
+        $this->seeInDatabase('league_groups', ['id' => $one, 'nine' => 'front']);
+    }
+
     public function testAddAllGroupsToARound(): void
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'League']);

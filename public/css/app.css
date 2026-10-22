@@ -143,7 +143,10 @@ thead th { font-size: 0.85rem; color: var(--muted); }
 /* Money columns line up on the right so the dollars and cents align. */
 th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
 tbody tr:last-child td { border-bottom: 0; }
-.row-actions { display: flex; gap: 0.75rem; }
+.row-actions { display: flex; align-items: baseline; gap: 0.75rem; }
+.row-form { display: inline; margin: 0; }
+/* A form button that looks like the links next to it. */
+.link-button { padding: 0; background: none; border: 0; color: var(--accent); font: inherit; font-weight: 400; text-decoration: underline; cursor: pointer; }
 
 /* Email addresses in lists: cut off with … to keep the table narrow; the full
    address is in the link and shown on hover. */

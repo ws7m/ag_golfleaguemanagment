@@ -259,6 +259,7 @@ abstract class CrudController extends BaseController
             'columns'   => $this->listColumns,
             'filters'   => $this->filters,
             'actions'   => $this->rowActions(),
+            'postActions' => $this->rowPostActions(),
             'editLinkColumn' => $this->editLinkColumn,
             'extraFormView'  => $this->extraFormView,
             'headActions' => $this->headActions,
@@ -286,6 +287,17 @@ abstract class CrudController extends BaseController
      * @return array<string, string>
      */
     protected function rowActions(): array
+    {
+        return [];
+    }
+
+    /**
+     * Extra buttons on each list row that change data, sent as forms (POST)
+     * rather than links: label => route with {id}.
+     *
+     * @return array<string, string>
+     */
+    protected function rowPostActions(): array
     {
         return [];
     }
