@@ -15,6 +15,8 @@ class Groups extends CrudController
     protected string $baseRoute  = 'admin/groups';
     protected array $listColumns = ['group_number', 'nine', 'front_tee_time_id', 'back_tee_time_id', 'player1_id', 'player2_id', 'player3_id', 'player4_id', 'active'];
     protected array $filters     = ['league_id'];
+    // Clicking a group's Front/Back on the list switches it to the other nine.
+    protected array $toggleColumns = ['nine' => 'admin/groups/{id}/switch-nine'];
     protected array $orderBy     = ['group_number' => 'ASC'];
     protected ?string $extraIndexView = 'admin/groups/tools';
     protected array $headActions      = ['Switch front/back' => '#switch-nine', 'Create groups for players' => '#create-groups', 'Delete all groups' => '#delete-groups'];
@@ -161,11 +163,6 @@ class Groups extends CrudController
         }
 
         return $back->with('message', $message);
-    }
-
-    protected function rowPostActions(): array
-    {
-        return ['Switch nine' => 'admin/groups/{id}/switch-nine'];
     }
 
     /**

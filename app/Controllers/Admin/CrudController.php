@@ -64,6 +64,14 @@ abstract class CrudController extends BaseController
      */
     protected ?string $editLinkColumn = null;
 
+    /**
+     * List columns whose value is a button that changes it, sent as a form
+     * (POST): column => route with {id}. E.g. a group's Front/Back.
+     *
+     * @var array<string, string>
+     */
+    protected array $toggleColumns = [];
+
     /** @var array<string, string> Extra buttons at the top of the list: label => link */
     protected array $headActions = [];
 
@@ -259,7 +267,7 @@ abstract class CrudController extends BaseController
             'columns'   => $this->listColumns,
             'filters'   => $this->filters,
             'actions'   => $this->rowActions(),
-            'postActions' => $this->rowPostActions(),
+            'toggleColumns' => $this->toggleColumns,
             'editLinkColumn' => $this->editLinkColumn,
             'extraFormView'  => $this->extraFormView,
             'headActions' => $this->headActions,
@@ -287,17 +295,6 @@ abstract class CrudController extends BaseController
      * @return array<string, string>
      */
     protected function rowActions(): array
-    {
-        return [];
-    }
-
-    /**
-     * Extra buttons on each list row that change data, sent as forms (POST)
-     * rather than links: label => route with {id}.
-     *
-     * @return array<string, string>
-     */
-    protected function rowPostActions(): array
     {
         return [];
     }

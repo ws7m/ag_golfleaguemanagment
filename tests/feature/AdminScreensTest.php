@@ -658,7 +658,10 @@ final class AdminScreensTest extends CIUnitTestCase
         $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 2, 'nine' => 'front', 'active' => 1]);
         $two = $db->insertID();
 
-        $this->asAdmin()->get("admin/groups?league_id={$leagueId}")->assertSee("admin/groups/{$one}/switch-nine");
+        // The Playing value itself is the button that switches it.
+        $html = $this->asAdmin()->get("admin/groups?league_id={$leagueId}")->getBody();
+        $this->assertMatchesRegularExpression("#action=\"[^\"]*admin/groups/{$one}/switch-nine\"[^>]*>.*?<button[^>]*>Front</button>#s", $html);
+        $this->assertStringNotContainsString('Switch nine', $html);
 
         $this->asAdmin()->post("admin/groups/{$one}/switch-nine")
             ->assertSessionHas('message', 'Group 1 now plays the back nine.');

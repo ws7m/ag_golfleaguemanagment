@@ -36,7 +36,7 @@
 <?php if ($rows === []): ?>
     <p class="muted">No <?= esc(strtolower($title)) ?> yet.</p>
 <?php else: ?>
-    <?php $editColumn = $editLinkColumn === null || $actions !== [] || $postActions !== []; ?>
+    <?php $editColumn = $editLinkColumn === null || $actions !== []; ?>
     <div class="table-wrap">
         <table>
             <thead>
@@ -53,6 +53,13 @@
                     <?php foreach ($columns as $name): ?>
                         <?php if ($name === $editLinkColumn): ?>
                             <td><a href="<?= site_url("{$baseRoute}/{$row['id']}/edit") ?>" title="Edit"><?= esc(field_display($fields[$name], $row[$name] ?? null)) ?: 'Edit' ?></a></td>
+                        <?php elseif (isset($toggleColumns[$name])): ?>
+                            <td>
+                                <form method="post" action="<?= site_url(str_replace('{id}', (string) $row['id'], $toggleColumns[$name])) ?>" class="row-form">
+                                    <?= csrf_field() ?>
+                                    <button type="submit" class="link-button" title="Click to change"><?= esc(field_display($fields[$name], $row[$name] ?? null)) ?: '—' ?></button>
+                                </form>
+                            </td>
                         <?php else: ?>
                             <td<?= ($fields[$name]['type'] ?? '') === 'money' ? ' class="num"' : '' ?>><?= field_cell($fields[$name], $row[$name] ?? null) ?></td>
                         <?php endif ?>
@@ -62,12 +69,6 @@
                             <a href="<?= site_url("{$baseRoute}/{$row['id']}/edit") ?>">Edit</a>
                             <?php foreach ($actions as $label => $route): ?>
                                 <a href="<?= site_url(str_replace('{id}', (string) $row['id'], $route)) ?>"><?= esc($label) ?></a>
-                            <?php endforeach ?>
-                            <?php foreach ($postActions as $label => $route): ?>
-                                <form method="post" action="<?= site_url(str_replace('{id}', (string) $row['id'], $route)) ?>" class="row-form">
-                                    <?= csrf_field() ?>
-                                    <button type="submit" class="link-button"><?= esc($label) ?></button>
-                                </form>
                             <?php endforeach ?>
                         </td>
                     <?php endif ?>
