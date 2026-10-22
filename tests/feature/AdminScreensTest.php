@@ -554,20 +554,58 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->asAdmin()->get("admin/players?league_id={$leagueId}")->assertSee('<td class="num">$17.50</td>');
     }
 
-    public function testScoresListShowsGroupWithoutLeague(): void
+    public function testScoresListHasTogglesHoleBoxesAndPlainNames(): void
     {
-        $leagueId = (new LeagueModel())->insert(['name' => 'Monday League']);
+        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
         $courseId = (new CourseModel())->insert(['name' => 'Course']);
         $roundId  = (new RoundModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-05-03']);
-        $playerId = (new PlayerModel())->insert(['first_name' => 'Jo', 'last_name' => 'Golfer']);
+        $playerId = (new PlayerModel())->insert(['first_name' => 'Jo', 'last_name' => 'Golfer', 'member_number' => 321]);
         $db       = db_connect();
         $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 3, 'active' => 1]);
         $groupId = $db->insertID();
-        $db->table('scores')->insert(['league_id' => $leagueId, 'player_id' => $playerId, 'round_id' => $roundId, 'group_id' => $groupId]);
+        $row     = ['league_id' => $leagueId, 'player_id' => $playerId, 'round_id' => $roundId, 'group_id' => $groupId, 'nine' => 'back', 'playing' => 1, 'paid' => 0, 'handicap_used' => 6];
+        for ($i = 1; $i <= 18; $i++) {
+            $row["hole{$i}"] = 0;
+        }
+        $db->table('scores')->insert($row);
+        $scoreId = $db->insertID();
 
-        $result = $this->asAdmin()->get("admin/scores?round_id={$roundId}");
-        $result->assertSee('<td>Group 3</td>');
-        $result->assertDontSee('Group 3 (Monday League)');
+        $html = $this->asAdmin()->get("admin/scores?round_id={$roundId}")->getBody();
+        $this->assertStringNotContainsString('Group 3', $html, 'No group column');
+        $this->assertStringContainsString('<td>Golfer, Jo</td>', $html, 'Name without the member number');
+        $this->assertStringNotContainsString('#321', $html);
+        $this->assertStringContainsString("admin/scores/{$scoreId}/toggle/playing", $html);
+        $this->assertStringContainsString("admin/scores/{$scoreId}/toggle/paid", $html);
+        // Back nine: boxes for holes 10-18 only.
+        $this->assertStringContainsString("name=\"scores[{$scoreId}][hole10]\"", $html);
+        $this->assertStringContainsString("name=\"scores[{$scoreId}][hole18]\"", $html);
+        $this->assertStringNotContainsString("name=\"scores[{$scoreId}][hole9]\"", $html);
+
+        // Toggling Paid switches it and comes back to the same round.
+        $this->asAdmin()->post("admin/scores/{$scoreId}/toggle/paid", ['return_query' => "round_id={$roundId}"])
+            ->assertRedirectTo("/admin/scores?round_id={$roundId}");
+        $this->seeInDatabase('scores', ['id' => $scoreId, 'paid' => 1]);
+        $this->asAdmin()->post("admin/scores/{$scoreId}/toggle/playing");
+        $this->seeInDatabase('scores', ['id' => $scoreId, 'playing' => 0]);
+
+        // Saving hole scores: gross and net once all nine are in.
+        $holes = [];
+        foreach (range(10, 17) as $h) {
+            $holes["hole{$h}"] = '5';
+        }
+        $holes['hole18'] = '';
+        $this->asAdmin()->post('admin/scores/holes', ['scores' => [$scoreId => $holes], 'return_round_id' => $roundId])
+            ->assertSessionHas('message', '1 scores saved.');
+        $this->seeInDatabase('scores', ['id' => $scoreId, 'hole10' => 5, 'hole18' => 0, 'gross' => null]);
+
+        $holes['hole18'] = '4';
+        $this->asAdmin()->post('admin/scores/holes', ['scores' => [$scoreId => $holes], 'return_round_id' => $roundId]);
+        $this->seeInDatabase('scores', ['id' => $scoreId, 'hole18' => 4, 'gross' => 44, 'net' => 38, 'hole1' => 0]);
+
+        // A bad value is refused for that score.
+        $holes['hole12'] = '55';
+        $this->asAdmin()->post('admin/scores/holes', ['scores' => [$scoreId => $holes]])->assertSessionHas('error');
+        $this->seeInDatabase('scores', ['id' => $scoreId, 'hole12' => 5]);
     }
 
     public function testNewPlayerStartsWithLastNameAsPassword(): void

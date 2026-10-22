@@ -47,6 +47,16 @@ class Lookup
     }
 
     /**
+     * Player labels without the member number: "Last, First".
+     */
+    public static function playerNames(): array
+    {
+        $rows = (new PlayerModel())->findAll();
+
+        return self::labels($rows, static fn ($r) => "{$r['last_name']}, {$r['first_name']}");
+    }
+
+    /**
      * Short player labels for list pages: last name and first initial.
      */
     public static function playersShort(): array

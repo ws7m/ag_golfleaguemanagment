@@ -81,6 +81,14 @@ abstract class CrudController extends BaseController
      */
     protected array $selectColumns = [];
 
+    /**
+     * List columns drawn by a view of their own, which gets the row as
+     * $row: column => view name. The column needs a listFields() entry.
+     *
+     * @var array<string, string>
+     */
+    protected array $cellViews = [];
+
     /** @var array<string, string> Extra buttons at the top of the list: label => link */
     protected array $headActions = [];
 
@@ -291,6 +299,7 @@ abstract class CrudController extends BaseController
             'actions'   => $this->rowActions(),
             'toggleColumns' => $this->toggleColumns,
             'selectColumns' => $this->selectColumns,
+            'cellViews'     => $this->cellViews,
             'editLinkColumn' => $this->editLinkColumn,
             'extraFormView'  => $this->extraFormView,
             'headActions' => $this->headActions,

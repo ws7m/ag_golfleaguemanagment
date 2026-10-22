@@ -146,6 +146,11 @@ tbody tr:last-child td { border-bottom: 0; }
 .row-actions { display: flex; align-items: baseline; gap: 0.75rem; }
 .row-form { display: inline; margin: 0; }
 .row-select { width: auto; padding: 0.2rem 0.4rem; font-size: 0.9rem; }
+
+/* Hole score boxes on the scores list: two digits each. */
+.hole-cells { display: inline-flex; gap: 2px; }
+.hole-cell { width: 1.85rem; padding: 0.2rem 0; text-align: center; font-size: 0.9rem; }
+.hole-cell::placeholder { color: var(--muted); opacity: 0.5; }
 /* A form button that looks like the links next to it. */
 .link-button { padding: 0; background: none; border: 0; color: var(--accent); font: inherit; font-weight: 400; text-decoration: underline; cursor: pointer; }
 

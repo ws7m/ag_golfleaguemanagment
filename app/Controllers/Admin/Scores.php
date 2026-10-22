@@ -12,7 +12,14 @@ class Scores extends CrudController
     protected string $title      = 'Scores';
     protected string $singular   = 'Score';
     protected string $baseRoute  = 'admin/scores';
-    protected array $listColumns = ['round_id', 'player_id', 'group_id', 'nine', 'playing', 'paid', 'gross', 'net', 'place', 'winnings_cents'];
+    protected array $listColumns = ['round_id', 'player_id', 'nine', 'playing', 'paid', 'holes', 'gross', 'net', 'place', 'winnings_cents'];
+    // Clicking Yes/No for Playing or Paid on the list switches it.
+    protected array $toggleColumns = [
+        'playing' => 'admin/scores/{id}/toggle/playing',
+        'paid'    => 'admin/scores/{id}/toggle/paid',
+    ];
+    // Small boxes for the nine holes played, saved with "Save hole scores".
+    protected array $cellViews = ['holes' => 'admin/scores/hole_cells'];
     protected array $filters     = ['round_id'];
     protected array $orderBy     = ['round_id' => 'DESC', 'player_id' => 'ASC'];
     protected ?string $extraIndexView = 'admin/scores/tools';
@@ -22,9 +29,9 @@ class Scores extends CrudController
     {
         $fields = [
             'round_id'  => ['label' => 'Round', 'type' => 'select', 'options' => 'rounds', 'required' => true],
-            'player_id' => ['label' => 'Player', 'type' => 'select', 'options' => 'players', 'required' => true],
+            'player_id' => ['label' => 'Player', 'type' => 'select', 'options' => 'players', 'listOptions' => 'playerNames', 'required' => true],
             'group_id'  => ['label' => 'Group played in', 'type' => 'select', 'options' => 'groups', 'listOptions' => 'groupsShort'],
-            'nine'      => ['label' => 'Nine played', 'type' => 'select', 'options' => ['front' => 'Front', 'back' => 'Back']],
+            'nine'      => ['label' => 'Nine played', 'listLabel' => 'Nine', 'type' => 'select', 'options' => ['front' => 'Front', 'back' => 'Back']],
             'playing'   => ['label' => 'Playing', 'type' => 'checkbox', 'default' => 1],
             'paid'      => ['label' => 'Paid', 'type' => 'checkbox'],
             'locked'    => ['label' => 'Locked', 'type' => 'checkbox'],
@@ -69,6 +76,85 @@ class Scores extends CrudController
         $from = $round ? 'the ' . trim("{$round['round_date']} {$round['name']}") . ' round' : 'every round in the league';
 
         return $back->with('message', "{$count} scores deleted from {$from}.");
+    }
+
+    protected function listFields(): array
+    {
+        return ['holes' => ['label' => 'Holes']];
+    }
+
+    /**
+     * Switches a score's Playing or Paid between yes and no.
+     */
+    public function toggle(int $id, string $field)
+    {
+        $score = $this->findOr404($id);
+        if (! in_array($field, ['playing', 'paid'], true)) {
+            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+        }
+        db_connect()->table('scores')->where('id', $id)->update([$field => $score[$field] ? 0 : 1, 'updated_at' => date('Y-m-d H:i:s')]);
+
+        return redirect()->to($this->listUrl());
+    }
+
+    /**
+     * Saves the hole scores typed into the list: for each score, the holes
+     * of the nine it is playing (front if not set yet). Blank means 0, not
+     * entered yet. Gross (and net, when a handicap is set) are worked out
+     * once every hole of the nine is entered.
+     */
+    public function saveHoles()
+    {
+        $posted = $this->request->getPost('scores') ?? [];
+        $model  = new ScoreModel();
+        $errors = [];
+        $saved  = 0;
+
+        $db = db_connect();
+        $db->transStart();
+        foreach ($posted as $id => $holes) {
+            $score = $model->find((int) $id);
+            if ($score === null || ! is_array($holes)) {
+                continue;
+            }
+            $nine    = $score['nine'] ?: 'front';
+            $changes = ['nine' => $nine];
+            foreach (ScoreModel::holesForNine($nine) as $hole) {
+                $value = trim((string) ($holes["hole{$hole}"] ?? ''));
+                if ($value !== '' && (! ctype_digit($value) || (int) $value > 20)) {
+                    $errors[] = "Hole {$hole} must be a number from 0 to 20 (score {$id}).";
+
+                    continue 2;
+                }
+                $changes["hole{$hole}"] = (int) $value;
+            }
+            $changes['gross'] = ScoreModel::grossForNine($changes + $score);
+            $changes['net']   = $changes['gross'] !== null && $score['handicap_used'] !== null
+                ? $changes['gross'] - (int) $score['handicap_used']
+                : null;
+            $changes['updated_at'] = date('Y-m-d H:i:s');
+            $db->table('scores')->where('id', (int) $id)->update($changes);
+            $saved++;
+        }
+        $db->transComplete();
+
+        $back = redirect()->to($this->listUrl());
+        if ($errors !== []) {
+            return $back->with('error', implode(' ', $errors) . " {$saved} other scores were saved.");
+        }
+
+        return $back->with('message', "{$saved} scores saved.");
+    }
+
+    /**
+     * The scores list, keeping the round it was showing.
+     */
+    private function listUrl(): string
+    {
+        parse_str((string) $this->request->getPost('return_query'), $query);
+        $roundId = (int) ($this->request->getGet('round_id') ?: $this->request->getPost('return_round_id') ?: ($query['round_id'] ?? 0));
+
+        return site_url($this->baseRoute . ($roundId ? "?round_id={$roundId}" : ''));
     }
 
     public function new(): string

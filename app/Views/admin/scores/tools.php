@@ -1,3 +1,10 @@
+<form method="post" action="<?= site_url('admin/scores/holes') ?>" id="hole-scores" class="actions">
+    <?= csrf_field() ?>
+    <input type="hidden" name="return_round_id" value="<?= esc((string) ($filterValues['round_id'] ?? ''), 'attr') ?>">
+    <button type="submit">Save hole scores</button>
+    <span class="muted">Type each player's strokes in the hole boxes above (the grey number is the hole), then save. Blank means not entered yet.</span>
+</form>
+
 <?php
 $leagues = \App\Libraries\Lookup::leagues();
 $current = \App\Libraries\Lookup::currentLeagueId();

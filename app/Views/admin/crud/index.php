@@ -53,6 +53,8 @@
                     <?php foreach ($columns as $name): ?>
                         <?php if ($name === $editLinkColumn): ?>
                             <td><a href="<?= site_url("{$baseRoute}/{$row['id']}/edit") ?>" title="Edit"><?= esc(field_display($fields[$name], $row[$name] ?? null)) ?: 'Edit' ?></a></td>
+                        <?php elseif (isset($cellViews[$name])): ?>
+                            <td><?= view($cellViews[$name], ['row' => $row]) ?></td>
                         <?php elseif (isset($selectColumns[$name])): ?>
                             <td>
                                 <form method="post" action="<?= site_url(str_replace('{id}', (string) $row['id'], $selectColumns[$name])) ?>" class="row-form">
@@ -69,6 +71,7 @@
                             <td>
                                 <form method="post" action="<?= site_url(str_replace('{id}', (string) $row['id'], $toggleColumns[$name])) ?>" class="row-form">
                                     <?= csrf_field() ?>
+                                    <input type="hidden" name="return_query" value="<?= esc(service('request')->getUri()->getQuery(), 'attr') ?>">
                                     <button type="submit" class="link-button" title="Click to change"><?= esc(field_display($fields[$name], $row[$name] ?? null)) ?: '—' ?></button>
                                 </form>
                             </td>
