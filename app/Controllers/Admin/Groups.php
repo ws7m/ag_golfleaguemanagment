@@ -27,7 +27,7 @@ class Groups extends CrudController
         'group_number'                                                               => 'ASC',
     ];
     protected ?string $extraIndexView = 'admin/groups/tools';
-    protected array $headActions      = ['Switch front/back' => '#switch-nine', 'Shift tee times' => '#shift-tee-times', 'Create groups for players' => '#create-groups', 'Delete all groups' => '#delete-groups'];
+    protected array $headActions      = ['Tee time list' => 'admin/groups/tee-sheet', 'Switch front/back' => '#switch-nine', 'Shift tee times' => '#shift-tee-times', 'Create groups for players' => '#create-groups', 'Delete all groups' => '#delete-groups'];
 
     // Players in a group, for working out how many groups a league needs.
     public const PLAYERS_PER_GROUP = 4;
@@ -170,6 +170,56 @@ class Groups extends CrudController
         $range   = $created === 1 ? "group {$first}" : "groups {$first}–" . ($number - 1);
 
         return $back->with('message', "{$summary} Created {$created} ({$range}). Set their tee times and players on each group.");
+    }
+
+    /**
+     * A printable tee time list for a league: the groups playing the front
+     * nine, then those playing the back nine, each in tee time order, with
+     * each group's players (last name, first name). Groups without a tee
+     * time for their nine are listed last. Only active groups are included.
+     */
+    public function teeSheet(): string
+    {
+        $leagueId = (int) ($this->request->getGet('league_id') ?: Lookup::currentLeagueId());
+        $league   = (new LeagueModel())->find($leagueId);
+
+        $groups = (new LeagueGroupModel())
+            ->where('league_id', $leagueId)
+            ->where('active', 1)
+            ->findAll();
+
+        $playerIds = [];
+        foreach ($groups as $group) {
+            $playerIds = [...$playerIds, ...LeagueGroupModel::playerIds($group)];
+        }
+        $names = [];
+        if ($playerIds !== []) {
+            foreach ((new PlayerModel())->whereIn('id', $playerIds)->findAll() as $player) {
+                $names[(int) $player['id']] = "{$player['last_name']}, {$player['first_name']}";
+            }
+        }
+
+        $sections = ['front' => [], 'back' => []];
+        foreach ($groups as $group) {
+            $nine = $group['nine'] === 'back' ? 'back' : 'front';
+            $sections[$nine][] = [
+                'time'    => $group["{$nine}_tee_time"],
+                'number'  => (int) $group['group_number'],
+                'players' => array_map(static fn ($id) => $names[$id] ?? '', LeagueGroupModel::playerIds($group)),
+            ];
+        }
+        foreach ($sections as &$rows) {
+            // Ascending tee time; groups without one last, then by group number.
+            usort($rows, static fn ($a, $b) => [$a['time'] === null, $a['time'], $a['number']] <=> [$b['time'] === null, $b['time'], $b['number']]);
+        }
+        unset($rows);
+
+        return view('admin/groups/tee_sheet', [
+            'title'    => 'Tee time list',
+            'league'   => $league,
+            'leagues'  => Lookup::leagues(),
+            'sections' => $sections,
+        ]);
     }
 
     /**

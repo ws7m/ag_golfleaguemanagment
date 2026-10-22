@@ -166,3 +166,19 @@ table.holes .totals-all th, table.holes .totals-all td { border-top: 2px solid v
 .card { display: block; padding: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); text-decoration: none; color: var(--text); }
 .card-count { display: block; font-size: 1.6rem; font-weight: 700; color: var(--accent); }
 .card-label { color: var(--muted); }
+
+/* Tee time list */
+.tee-sheet { margin-bottom: 1.5rem; }
+.tee-sheet table { max-width: 520px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.tee-sheet td { vertical-align: top; white-space: normal; }
+.tee-sheet-time { font-weight: 700; width: 6rem; }
+.print-only { display: none; }
+
+@media print {
+    .site-header, .no-print, .flash { display: none !important; }
+    .print-only { display: block; }
+    body, .page { background: #fff; color: #000; padding: 0; }
+    .tee-sheet table { border-color: #999; background: #fff; }
+    .tee-sheet th, .tee-sheet td { border-color: #ccc; color: #000; }
+    .tee-sheet tr { break-inside: avoid; }
+}

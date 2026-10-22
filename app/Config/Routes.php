@@ -51,6 +51,7 @@ $routes->group('admin', ['filter' => 'adminauth', 'namespace' => 'App\Controller
     $routes->post('courses/(:num)/holes', 'Holes::update/$1');
     $routes->get('courses/(:num)/export', 'Courses::export/$1');
     $routes->post('courses/(:num)/import', 'Courses::import/$1');
+    $routes->get('groups/tee-sheet', 'Groups::teeSheet');
     $routes->post('groups/generate', 'Groups::generate');
     $routes->post('groups/switch-nine', 'Groups::switchNine');
     $routes->post('groups/shift-tee-times', 'Groups::shiftTeeTimes');

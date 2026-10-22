@@ -327,6 +327,33 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->assertSame(['6', '3', '2', '5', '4', '1'], $order);
     }
 
+    public function testTeeTimeListShowsFrontThenBackInTimeOrderWithPlayers(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'Monday League']);
+        $players  = new PlayerModel();
+        $ann      = $players->insert(['first_name' => 'Ann', 'last_name' => 'Ames', 'league_id' => $leagueId]);
+        $bob      = $players->insert(['first_name' => 'Bob', 'last_name' => 'Baker', 'league_id' => $leagueId]);
+        $cy       = $players->insert(['first_name' => 'Cy', 'last_name' => 'Cole', 'league_id' => $leagueId]);
+        $groups   = db_connect()->table('league_groups');
+        $groups->insert(['league_id' => $leagueId, 'group_number' => 1, 'nine' => 'front', 'front_tee_time' => '16:10', 'back_tee_time' => '16:40', 'player1_id' => $ann, 'player2_id' => $bob, 'active' => 1]);
+        $groups->insert(['league_id' => $leagueId, 'group_number' => 2, 'nine' => 'front', 'front_tee_time' => '16:00', 'player1_id' => $cy, 'active' => 1]);
+        $groups->insert(['league_id' => $leagueId, 'group_number' => 3, 'nine' => 'back', 'front_tee_time' => '15:00', 'back_tee_time' => '16:02', 'active' => 1]);
+        $groups->insert(['league_id' => $leagueId, 'group_number' => 4, 'nine' => 'front', 'front_tee_time' => '15:30', 'active' => 0]);
+
+        $this->asAdmin()->get("admin/groups?league_id={$leagueId}")->assertSee('admin/groups/tee-sheet');
+
+        $html = $this->asAdmin()->get("admin/groups/tee-sheet?league_id={$leagueId}")->getBody();
+        $text = trim((string) preg_replace(['/<[^>]+>/', '/\s+/'], ' ', substr($html, strpos($html, '<h2>Front</h2>'))));
+        $text = (string) preg_replace('/\s+/', ' ', $text);
+
+        // Front: 16:00 then 16:10, with players as "Last, First"; then Back.
+        // Group 3's front time (15:00) isn't shown, as it plays the back
+        // nine; inactive group 4 isn't listed.
+        $this->assertStringStartsWith('Front Tee time Players 16:00 Cole, Cy 16:10 Ames, Ann Baker, Bob Back Tee time Players 16:02 No players', $text);
+        $this->assertStringNotContainsString('15:00', $html);
+        $this->assertStringNotContainsString('15:30', $html);
+    }
+
     public function testGroupTeeTimesAreSavedAndChecked(): void
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'League']);
