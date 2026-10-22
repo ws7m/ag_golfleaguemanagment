@@ -23,6 +23,21 @@ $leagueOptions = static function (string $id) use ($fields, $filterValues): stri
     </form>
 </section>
 
+<section class="panel" id="create-groups">
+    <h2>Create groups for registered players</h2>
+    <p class="muted">Works out how many groups the league needs for its registered players at
+        <?= \App\Controllers\Admin\Groups::PLAYERS_PER_GROUP ?> players to a group (8 players need 2 groups, 9 need 3), and
+        creates the ones that are missing. Groups the league already has count towards that. New groups are numbered after
+        the existing ones and start on the front nine, with no tee times or players: set those on each group.</p>
+    <form method="post" action="<?= site_url('admin/groups/generate') ?>" class="form inline"
+          onsubmit="return confirm('Create the groups needed for this league\'s registered players?')">
+        <?= csrf_field() ?>
+        <label for="gen_group_league">League</label>
+        <?= $leagueOptions('gen_group_league') ?>
+        <button type="submit">Create groups</button>
+    </form>
+</section>
+
 <section class="panel panel-danger" id="delete-groups">
     <h2>Delete all groups</h2>
     <p class="muted">Removes every group in the league so you can start over. Scores that recorded one of these groups as the

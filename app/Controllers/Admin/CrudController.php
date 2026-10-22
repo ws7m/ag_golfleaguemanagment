@@ -248,10 +248,19 @@ abstract class CrudController extends BaseController
         return $record;
     }
 
+    /**
+     * Fields for the add/edit form. Screens can override this to narrow the
+     * choices in a select to suit the record being edited.
+     */
+    protected function formFields(array $record, ?int $id): array
+    {
+        return $this->resolvedFields();
+    }
+
     protected function form(array $record, ?int $id, array $errors = []): string
     {
         return view('admin/crud/form', $this->viewData([
-            'fields' => $this->resolvedFields(),
+            'fields' => $this->formFields($record, $id),
             'record' => $this->formRecord($record, $id),
             'id'     => $id,
             'errors' => $errors,
