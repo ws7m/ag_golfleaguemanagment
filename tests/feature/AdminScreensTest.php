@@ -544,7 +544,7 @@ final class AdminScreensTest extends CIUnitTestCase
             ->assertSessionHas('message', '9 registered players need 3 groups of 4. The league already has 3 groups, so none were created.');
     }
 
-    public function testGroupFormOffersOnlyUnassignedTeeTimesAndPlayers(): void
+    public function testGroupFormOffersAnyTeeTimeButOnlyUnassignedPlayers(): void
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'League']);
         $otherId  = (new LeagueModel())->insert(['name' => 'Other']);
@@ -572,9 +572,10 @@ final class AdminScreensTest extends CIUnitTestCase
         };
 
         $html = $this->asAdmin()->get("admin/groups/{$group2}/edit")->getBody();
-        // Group 1 has front 16:00 and Ann, so neither is offered for group 2;
-        // nothing from the other league is offered either.
-        $this->assertSame([(string) $f2 => 'Front 16:10'], $options($html, 'front_tee_time_id'));
+        // Every front/back tee time of the league is offered, even 16:00 which
+        // group 1 has; Ann is in group 1, so she isn't offered. Nothing from
+        // the other league is offered.
+        $this->assertSame([(string) $f1 => 'Front 16:00', (string) $f2 => 'Front 16:10'], $options($html, 'front_tee_time_id'));
         $this->assertSame([(string) $b1 => 'Back 16:02'], $options($html, 'back_tee_time_id'));
         $this->assertSame([(string) $bob => 'Baker, Bob'], $options($html, 'player1_id'));
 
@@ -584,7 +585,7 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->assertSame([(string) $ann => 'Ames, Ann', (string) $bob => 'Baker, Bob'], $options($html, 'player1_id'));
     }
 
-    public function testSavingAGroupRefusesTeeTimesAndPlayersAnotherGroupHas(): void
+    public function testSavingAGroupRefusesPlayersAnotherGroupHasButAllowsSharedTeeTimes(): void
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'League']);
         $courseId = (new CourseModel())->insert(['name' => 'Course']);
@@ -597,11 +598,14 @@ final class AdminScreensTest extends CIUnitTestCase
         $group2 = $db->insertID();
 
         $base = ['league_id' => $leagueId, 'group_number' => '2', 'nine' => 'front', 'active' => '1'];
-        $this->asAdmin()->post("admin/groups/{$group2}", $base + ['front_tee_time_id' => $f1])
-            ->assertSee('That front nine tee time is already assigned to group 1.');
         $this->asAdmin()->post("admin/groups/{$group2}", $base + ['player1_id' => $ann])
             ->assertSee('Ann Ames is already in group 1.');
-        $this->seeInDatabase('league_groups', ['id' => $group2, 'front_tee_time_id' => null, 'player1_id' => null]);
+        $this->seeInDatabase('league_groups', ['id' => $group2, 'player1_id' => null]);
+
+        // A tee time group 1 has can be given to group 2 as well.
+        $this->asAdmin()->post("admin/groups/{$group2}", $base + ['front_tee_time_id' => $f1])
+            ->assertRedirectTo('/admin/groups');
+        $this->seeInDatabase('league_groups', ['id' => $group2, 'front_tee_time_id' => $f1]);
 
         // Group 1 can still be saved with its own tee time and player.
         $this->asAdmin()->post("admin/groups/{$group1}", ['league_id' => $leagueId, 'group_number' => '1', 'nine' => 'back', 'front_tee_time_id' => $f1, 'player1_id' => $ann, 'active' => '1'])

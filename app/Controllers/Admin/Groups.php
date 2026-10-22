@@ -44,29 +44,27 @@ class Groups extends CrudController
     }
 
     /**
-     * On the add/edit form, offer only the tee times and players no other
-     * group in the league has yet (plus this group's own), and only this
-     * league's front or back nine tee times and registered players.
+     * On the add/edit form, offer the league's front nine tee times for the
+     * front tee time and back nine tee times for the back one (any of them,
+     * even if another group has it), and only the league's registered
+     * players who are not in another group (plus this group's own).
      */
     protected function formFields(array $record, ?int $id): array
     {
         $fields   = $this->resolvedFields();
         $leagueId = (int) ($record['league_id'] ?? 0) ?: Lookup::currentLeagueId();
-        $taken    = $this->takenByOtherGroups((int) $leagueId, $id);
+        $taken    = $this->playersInOtherGroups((int) $leagueId, $id);
 
         $teeTimes = (new TeeTimeModel())->where('league_id', $leagueId)->orderBy('tee_time')->findAll();
         foreach (['front', 'back'] as $nine) {
             $field   = "{$nine}_tee_time_id";
-            $current = (int) ($record[$field] ?? 0);
             $options = [];
             foreach ($teeTimes as $teeTime) {
-                $teeId = (int) $teeTime['id'];
-                if ($teeTime['nine'] === $nine && ($teeId === $current || ! isset($taken['tee_times'][$teeId]))) {
-                    $options[$teeId] = ucfirst($nine) . ' ' . $teeTime['tee_time'];
+                if ($teeTime['nine'] === $nine) {
+                    $options[(int) $teeTime['id']] = ucfirst($nine) . ' ' . $teeTime['tee_time'];
                 }
             }
             $fields[$field]['options'] = $options;
-            $fields[$field]['help']    = 'Only tee times no other group has are listed.';
         }
 
         $current = [];
@@ -84,7 +82,7 @@ class Groups extends CrudController
         $options = [];
         foreach ($players as $player) {
             $playerId = (int) $player['id'];
-            if (in_array($playerId, $current, true) || ! isset($taken['players'][$playerId])) {
+            if (in_array($playerId, $current, true) || ! isset($taken[$playerId])) {
                 $options[$playerId] = "{$player['last_name']}, {$player['first_name']}";
             }
         }
@@ -97,26 +95,21 @@ class Groups extends CrudController
     }
 
     /**
-     * Tee times and players already used by the league's other groups.
+     * Players already on the league's other groups.
      *
-     * @return array{tee_times: array<int, int>, players: array<int, int>} id => group number
+     * @return array<int, int> player id => group number
      */
-    private function takenByOtherGroups(int $leagueId, ?int $exceptGroupId): array
+    private function playersInOtherGroups(int $leagueId, ?int $exceptGroupId): array
     {
         $query = (new LeagueGroupModel())->where('league_id', $leagueId);
         if ($exceptGroupId !== null) {
             $query->where('id !=', $exceptGroupId);
         }
 
-        $taken = ['tee_times' => [], 'players' => []];
+        $taken = [];
         foreach ($query->findAll() as $group) {
-            foreach (['front_tee_time_id', 'back_tee_time_id'] as $field) {
-                if (! empty($group[$field])) {
-                    $taken['tee_times'][(int) $group[$field]] = (int) $group['group_number'];
-                }
-            }
             foreach (LeagueGroupModel::playerIds($group) as $playerId) {
-                $taken['players'][$playerId] = (int) $group['group_number'];
+                $taken[$playerId] = (int) $group['group_number'];
             }
         }
 
@@ -244,23 +237,17 @@ class Groups extends CrudController
 
     protected function checkBeforeSave(array $data, ?int $id): ?string
     {
-        // Tee times and players already on another group of the league can't
-        // be given to this one too (values the group already had are allowed).
+        // A player already on another group of the league can't be added to
+        // this one too (players the group already had are allowed).
         $before = $id === null ? [] : (new LeagueGroupModel())->find($id);
-        $taken  = $this->takenByOtherGroups((int) $data['league_id'], $id);
-        foreach (['front_tee_time_id' => 'front nine', 'back_tee_time_id' => 'back nine'] as $field => $nine) {
-            $teeId = (int) ($data[$field] ?? 0);
-            if ($teeId && $teeId !== (int) ($before[$field] ?? 0) && isset($taken['tee_times'][$teeId])) {
-                return "That {$nine} tee time is already assigned to group {$taken['tee_times'][$teeId]}.";
-            }
-        }
+        $taken  = $this->playersInOtherGroups((int) $data['league_id'], $id);
         $beforePlayers = $before === [] ? [] : LeagueGroupModel::playerIds($before);
         for ($i = 1; $i <= 6; $i++) {
             $playerId = (int) ($data["player{$i}_id"] ?? 0);
-            if ($playerId && ! in_array($playerId, $beforePlayers, true) && isset($taken['players'][$playerId])) {
+            if ($playerId && ! in_array($playerId, $beforePlayers, true) && isset($taken[$playerId])) {
                 $player = (new PlayerModel())->find($playerId);
 
-                return "{$player['first_name']} {$player['last_name']} is already in group {$taken['players'][$playerId]}.";
+                return "{$player['first_name']} {$player['last_name']} is already in group {$taken[$playerId]}.";
             }
         }
 
