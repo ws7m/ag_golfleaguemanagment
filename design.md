@@ -4,12 +4,12 @@
 This golf league management software will manage a public 9-hole golf league. The league plays at an 18-hole course. Each group plays either the front nine (holes 1–9) or the back nine (holes 10–18), and alternates between them week to week.
 
 ### 1.1 Scope and phases
-- **Phase 1:** Build data models for leagues, courses, holes, players, groups, tee times, rounds, scores, games, settings
+- **Phase 1:** Build data models for leagues, courses, holes, players, groups, rounds, scores, games, settings
      - A new league record is created each year the league is run
      - Courses and holes remain and link to the current league record
      - Players are linked to the current league record.  If new player is created, link is made to league, existing players from prior leagues are linked to the current league when they register
      - Groups are linked to the current league.  A group references players, up to 6 of them that play as a group.  Groups are created and maintained by the admin
-     - Tee times are linked to the current league and to a course.  Tee times are created and updated by the admin
+     - Each group has its own front nine and back nine tee time. There is no separate tee times list.
      - Rounds are created for each day the players will play in the league.  Rounds are linked to the league and to the course and to a game.  Admin only can create and update rounds.
      - Scores are linked to a round and to a player.  Players can create and enter scores, admin can also create, enter, and update scores.
 - **Phase 2:** Add a default admin player
@@ -107,8 +107,8 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
   - League Id
   - Group number
   - Playing - Front or back; the nine the group is playing now. A button switches every group in the league to the other nine between rounds.
-  - Front Tee time Id
-  - Back Tee time Id
+  - Front tee time - HH:MM, 24-hour; the group's tee time when it plays the front nine
+  - Back tee time - HH:MM, 24-hour; the group's tee time when it plays the back nine
   - Player1 Id - Normal member of the group
   - Player2 Id - Normal member of the group
   - Player3 Id - Normal member of the group
@@ -116,17 +116,12 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
   - Player5 Id - Normal member of the group
   - Player6 Id - Normal member of the group
   - Active
+- The groups list shows only the tee time for the nine each group is playing now, and clicking Front/Back switches it.
+- Admin can shift every group's front nine tee time, or every group's back nine tee time, earlier or later by a number of minutes (e.g. for daylight changes during the season). Two groups may have the same tee time.
 - Who actually played in a group in a given round, and which nine they played, is recorded on each player's score record for that round (Group Id and Front or back, see 2.9). This keeps a full history without changing the group each week.
 
 ### 2.6 Tee times
-- As admin, I want to be able to create/update/delete tee times
-  - Id
-  - League Id
-  - Course Id
-  - Front or back
-  - Time
-- Groups point to their front and back tee times (2.5); tee times do not point back to groups.
-- Admin can shift all tee times forward or backward by a number of minutes (e.g. for daylight changes during the season).
+- Removed: tee times are stored on each group (2.5).
 
 ### 2.7 Rounds
 - As admin, I want to be able to create/update/delete rounds for the league.  There will be round for each day played.
@@ -184,19 +179,19 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
 - **Initial admin:** an admin-only account with login `admin1`, created by the AdminSeeder. It is not a league player, so it does not appear in player lists; admin-only accounts are listed on the Settings page.
 
 ### 2.11 Deleting records
-- A record can be deleted only if nothing points to it. For example, a course with holes, tee times or rounds, a player with scores, a game used by a round, or a round with scores cannot be deleted.
+- A record can be deleted only if nothing points to it. For example, a course with holes or rounds, a player with scores, a game used by a round, or a round with scores cannot be deleted.
 - Records that are in use are marked inactive instead (Active = No). Inactive records are hidden from pick lists but stay in the database, so past rounds and scores remain complete.
 
 ## 3. Admin create/update/delete screens
   - Create and update a league entering all values.  Option to copy values from prior league record
   - Create and update a golf course including create and update holes
-  - Create update delete tee times.  Need to be able to shift tee times forward or backward at times due to season
+  - Set each group's front and back tee times.  Need to be able to shift all front or all back tee times forward or backward at times due to season
   - Create, update, and delete players
-  - Create, update, and delete groups. Assign players to a group, assign groups to tee times
+  - Create, update, and delete groups. Assign players to a group, set the group's front and back tee times
   - Create, update, and delete games
   - Create, update, and delete rounds
   - Create, update, and delete scores; mark which players have paid
-  - Activate a round - so it is available to play, assign groups to tee times
+  - Activate a round - so it is available to play
   - Close a round - Set it as inactive - Run scoring on the round based on the game.  (Calculating new player handicaps: Phase 5.)
   - Be able to send email to all players
   - Be able to send text message to players that allow it (later phase)
@@ -217,12 +212,12 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
 
 ## 6. Process
   - Admin - Closes prior league.  Marks it inactive, all data is saved
-  - Admin - Creates a new league.  Option to copy values from prior league including players, groups, tee times, rounds, games. Copied rounds need their dates changed to the new season.
+  - Admin - Creates a new league.  Option to copy values from prior league including players, groups (with their tee times), rounds, games. Copied rounds need their dates changed to the new season.
   - Admin - Send email out to all prior players about the new upcoming league
   - Players - May register for new league online. May pay online (later phase).  This either creates their new player record or modifies their existing record to work with new league
   - Admin - For manual play registration either update existing player record or create new player record.
-  - Admin - Get and set tee times from the golf course.  Update the tee time records to match
-  - Admin - Create or edit groups and assign players, match groups to tee times.
+  - Admin - Get tee times from the golf course.
+  - Admin - Create or edit groups, assign players, and set each group's front and back tee times to match.
   - Admin - Create or update rounds - Set in dates and games that will be played
 
   - At this point in time player league status page shows league schedule

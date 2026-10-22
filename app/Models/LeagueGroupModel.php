@@ -14,7 +14,7 @@ class LeagueGroupModel extends Model
     protected $returnType    = 'array';
     protected $useTimestamps = true;
     protected $allowedFields = [
-        'league_id', 'group_number', 'nine', 'front_tee_time_id', 'back_tee_time_id',
+        'league_id', 'group_number', 'nine', 'front_tee_time', 'back_tee_time',
         'player1_id', 'player2_id', 'player3_id', 'player4_id', 'player5_id', 'player6_id',
         'active',
     ];
@@ -23,8 +23,9 @@ class LeagueGroupModel extends Model
         'league_id'         => 'required|is_natural_no_zero',
         'group_number'      => 'required|is_natural_no_zero',
         'nine'              => 'permit_empty|in_list[front,back]',
-        'front_tee_time_id' => 'permit_empty|is_natural_no_zero',
-        'back_tee_time_id'  => 'permit_empty|is_natural_no_zero',
+        // Tee times are "HH:MM", 24-hour. Array form because the pattern has a |.
+        'front_tee_time'    => ['permit_empty', 'regex_match[/^([01][0-9]|2[0-3]):[0-5][0-9]$/]'],
+        'back_tee_time'     => ['permit_empty', 'regex_match[/^([01][0-9]|2[0-3]):[0-5][0-9]$/]'],
         'player1_id'        => 'permit_empty|is_natural_no_zero',
         'player2_id'        => 'permit_empty|is_natural_no_zero',
         'player3_id'        => 'permit_empty|is_natural_no_zero',

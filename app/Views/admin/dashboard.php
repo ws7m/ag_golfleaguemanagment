@@ -7,7 +7,7 @@
 <?php
 $cards = [
     'leagues' => ['Leagues', 'admin/leagues'], 'courses' => ['Courses', 'admin/courses'],
-    'tee_times' => ['Tee times', 'admin/tee-times'], 'players' => ['Players', 'admin/players'],
+    'players' => ['Players', 'admin/players'],
     'league_groups' => ['Groups', 'admin/groups'], 'games' => ['Games', 'admin/games'],
     'rounds' => ['Rounds', 'admin/rounds'], 'scores' => ['Scores', 'admin/scores'],
 ];

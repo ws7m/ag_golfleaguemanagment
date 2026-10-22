@@ -23,6 +23,26 @@ $leagueOptions = static function (string $id) use ($fields, $filterValues): stri
     </form>
 </section>
 
+<div class="panel-pair" id="shift-tee-times">
+<?php foreach (['front' => 'Front nine', 'back' => 'Back nine'] as $nine => $nineLabel): ?>
+    <section class="panel">
+        <h2>Shift <?= strtolower($nineLabel) ?> tee times</h2>
+        <p class="muted">Moves every group's <?= strtolower($nineLabel) ?> tee time earlier or later, e.g. for daylight changes.
+            Use a negative number to move earlier.</p>
+        <form method="post" action="<?= site_url('admin/groups/shift-tee-times') ?>" class="form inline"
+              onsubmit="return confirm('Move every group\'s <?= strtolower($nineLabel) ?> tee time by ' + this.minutes.value + ' minutes?')">
+            <?= csrf_field() ?>
+            <input type="hidden" name="nine" value="<?= $nine ?>">
+            <label for="shift_<?= $nine ?>_league">League</label>
+            <?= $leagueOptions("shift_{$nine}_league") ?>
+            <label for="shift_<?= $nine ?>_minutes">Minutes</label>
+            <input type="number" id="shift_<?= $nine ?>_minutes" name="minutes" step="1" required placeholder="e.g. -10 or 15" style="width: 8rem">
+            <button type="submit">Shift</button>
+        </form>
+    </section>
+<?php endforeach ?>
+</div>
+
 <section class="panel" id="create-groups">
     <h2>Create groups for registered players</h2>
     <p class="muted">Works out how many groups the league needs for its registered players at

@@ -38,7 +38,7 @@ class Leagues extends CrudController
 
     /**
      * Resets a league's data for testing: deletes its scores, groups,
-     * rounds, tee times and registered players. The league itself, games,
+     * rounds and registered players. The league itself, games,
      * courses and holes are kept. Players who are admins (or the logged-in
      * user), or who have scores or groups in another league, are kept too.
      */
@@ -63,7 +63,6 @@ class Leagues extends CrudController
         $counts['scores'] = $deleted('scores', ['league_id' => $id]);
         $counts['groups'] = $deleted('league_groups', ['league_id' => $id]);
         $counts['rounds'] = $deleted('rounds', ['league_id' => $id]);
-        $counts['tee times'] = $deleted('tee_times', ['league_id' => $id]);
 
         // Players registered in this league, except admins, the logged-in
         // user, and anyone still used by another league's scores or groups.

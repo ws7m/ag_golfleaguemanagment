@@ -5,7 +5,6 @@ use App\Models\HoleModel;
 use App\Models\LeagueModel;
 use App\Models\PlayerModel;
 use App\Models\RoundModel;
-use App\Models\TeeTimeModel;
 use CodeIgniter\Config\Factories;
 use CodeIgniter\Security\Exceptions\SecurityException;
 use CodeIgniter\Test\CIUnitTestCase;
@@ -96,7 +95,7 @@ final class AdminScreensTest extends CIUnitTestCase
     public function testEveryAdminScreenLoads(): void
     {
         foreach (['admin', 'admin/leagues', 'admin/leagues/new', 'admin/courses', 'admin/courses/new',
-            'admin/tee-times', 'admin/tee-times/new', 'admin/players', 'admin/players/new',
+            'admin/players', 'admin/players/new',
             'admin/groups', 'admin/groups/new', 'admin/games', 'admin/games/new',
             'admin/rounds', 'admin/rounds/new', 'admin/scores', 'admin/scores/new', 'admin/settings'] as $url) {
             $this->asAdmin()->get($url)->assertOK();
@@ -233,23 +232,6 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->seeInDatabase('holes', ['course_id' => $courseId, 'number' => 2, 'handicap' => 1]);
     }
 
-    public function testShiftTeeTimes(): void
-    {
-        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
-        $courseId = (new CourseModel())->insert(['name' => 'Course']);
-        $teeTimes = new TeeTimeModel();
-        $first    = $teeTimes->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'front', 'tee_time' => '15:10']);
-        $teeTimes->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'back', 'tee_time' => '15:12']);
-
-        $this->asAdmin()->post('admin/tee-times/shift', ['league_id' => $leagueId, 'minutes' => '-20'])
-            ->assertSessionHas('message');
-        $this->seeInDatabase('tee_times', ['id' => $first, 'tee_time' => '14:50']);
-
-        $this->asAdmin()->post('admin/tee-times/shift', ['league_id' => $leagueId, 'minutes' => '600'])
-            ->assertSessionHas('error');
-        $this->seeInDatabase('tee_times', ['id' => $first, 'tee_time' => '14:50']);
-    }
-
     public function testEditAndSavePlayer(): void
     {
         $players  = new PlayerModel();
@@ -294,26 +276,79 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->assertMatchesRegularExpression('#Abbott</td>\s*<td>Amy</td>\s*<td></td>\s*<td></td>\s*<td>None</td>#', $html);
     }
 
-    public function testGroupListShowsShortTeeTimesAndPlayerNames(): void
+    public function testGroupListShowsTheTeeTimeForTheNineBeingPlayed(): void
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'Monday League']);
-        $courseId = (new CourseModel())->insert(['name' => 'Course']);
-        $teeTime  = (new TeeTimeModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'front', 'tee_time' => '15:10']);
         $player   = (new PlayerModel())->insert(['first_name' => 'Jordan', 'last_name' => 'Williams', 'league_id' => $leagueId]);
-        db_connect()->table('league_groups')->insert([
-            'league_id' => $leagueId, 'group_number' => 2, 'front_tee_time_id' => $teeTime, 'player1_id' => $player, 'active' => 1,
+        $db       = db_connect();
+        $db->table('league_groups')->insert([
+            'league_id' => $leagueId, 'group_number' => 2, 'nine' => 'front', 'front_tee_time' => '15:10', 'back_tee_time' => '15:12', 'player1_id' => $player, 'active' => 1,
         ]);
-        $groupId = db_connect()->insertID();
+        $groupId = $db->insertID();
 
-        $result = $this->asAdmin()->get('admin/groups?league_id=' . $leagueId);
-        $result->assertSee('<td>Front 15:10</td>');
-        $result->assertSee('<td>Williams, J</td>');
-        $result->assertDontSee('Front 15:10 (Monday League)');
+        // Playing the front nine: only the front tee time is listed.
+        $html = $this->asAdmin()->get('admin/groups?league_id=' . $leagueId)->getBody();
+        $this->assertMatchesRegularExpression('#>Front</button>\s*</form>\s*</td>\s*<td>15:10</td>\s*<td>Williams, J</td>#', $html);
+        $this->assertStringNotContainsString('15:12', $html);
 
-        // The edit form shows the group's own tee time and player in full.
+        // After switching to the back nine, the back tee time is listed instead.
+        $this->asAdmin()->post("admin/groups/{$groupId}/switch-nine");
+        $html = $this->asAdmin()->get('admin/groups?league_id=' . $leagueId)->getBody();
+        $this->assertStringContainsString('<td>15:12</td>', $html);
+        $this->assertStringNotContainsString('15:10', $html);
+
+        // The edit form has both tee times.
         $form = $this->asAdmin()->get("admin/groups/{$groupId}/edit");
-        $form->assertSee('Front 15:10');
+        $form->assertSee('name="front_tee_time" value="15:10"');
+        $form->assertSee('name="back_tee_time" value="15:12"');
         $form->assertSee('Williams, Jordan');
+    }
+
+    public function testGroupTeeTimesAreSavedAndChecked(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
+        $base     = ['league_id' => $leagueId, 'group_number' => '1', 'nine' => 'front', 'active' => '1'];
+
+        $this->asAdmin()->post('admin/groups', $base + ['front_tee_time' => '3:10pm'])->assertSee('flash-error');
+        $this->dontSeeInDatabase('league_groups', ['league_id' => $leagueId]);
+
+        $this->asAdmin()->post('admin/groups', $base + ['front_tee_time' => '15:10', 'back_tee_time' => '15:12'])
+            ->assertRedirectTo('/admin/groups');
+        $this->seeInDatabase('league_groups', ['league_id' => $leagueId, 'front_tee_time' => '15:10', 'back_tee_time' => '15:12']);
+
+        // Two groups may have the same tee time.
+        $this->asAdmin()->post('admin/groups', ['group_number' => '2', 'front_tee_time' => '15:10'] + $base)
+            ->assertRedirectTo('/admin/groups');
+        $this->assertSame(2, db_connect()->table('league_groups')->where('front_tee_time', '15:10')->countAllResults());
+    }
+
+    public function testShiftFrontAndBackTeeTimesForAllGroups(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
+        $otherId  = (new LeagueModel())->insert(['name' => 'Other']);
+        $db       = db_connect();
+        $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 1, 'front_tee_time' => '15:10', 'back_tee_time' => '15:12', 'active' => 1]);
+        $one = $db->insertID();
+        $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 2, 'front_tee_time' => '15:20', 'back_tee_time' => null, 'active' => 1]);
+        $two = $db->insertID();
+        $db->table('league_groups')->insert(['league_id' => $otherId, 'group_number' => 1, 'front_tee_time' => '15:10', 'active' => 1]);
+        $other = $db->insertID();
+
+        $this->asAdmin()->post('admin/groups/shift-tee-times', ['league_id' => $leagueId, 'nine' => 'front', 'minutes' => '-20'])
+            ->assertSessionHas('message', "2 groups' front nine tee times moved 20 minutes earlier.");
+        $this->seeInDatabase('league_groups', ['id' => $one, 'front_tee_time' => '14:50', 'back_tee_time' => '15:12']);
+        $this->seeInDatabase('league_groups', ['id' => $two, 'front_tee_time' => '15:00']);
+        $this->seeInDatabase('league_groups', ['id' => $other, 'front_tee_time' => '15:10']);
+
+        $this->asAdmin()->post('admin/groups/shift-tee-times', ['league_id' => $leagueId, 'nine' => 'back', 'minutes' => '15'])
+            ->assertSessionHas('message', "1 groups' back nine tee times moved 15 minutes later.");
+        $this->seeInDatabase('league_groups', ['id' => $one, 'front_tee_time' => '14:50', 'back_tee_time' => '15:27']);
+        $this->seeInDatabase('league_groups', ['id' => $two, 'back_tee_time' => null]);
+
+        // Past midnight changes nothing.
+        $this->asAdmin()->post('admin/groups/shift-tee-times', ['league_id' => $leagueId, 'nine' => 'front', 'minutes' => '600'])
+            ->assertSessionHas('error');
+        $this->seeInDatabase('league_groups', ['id' => $one, 'front_tee_time' => '14:50']);
     }
 
     public function testGenerateWeeklyRoundsToLeagueEndDate(): void
@@ -454,77 +489,6 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->assertNull($players->verifyLogin('golfej', 'golfer'));
     }
 
-    public function testCreateFrontAndBackNineTeeTimes(): void
-    {
-        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
-        $courseId = (new CourseModel())->insert(['name' => 'Course']);
-        (new TeeTimeModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'front', 'tee_time' => '16:10']);
-
-        $this->asAdmin()->post('admin/tee-times/generate', [
-            'league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'front', 'start' => '16:00', 'increment' => '10', 'count' => '4',
-        ])->assertSessionHas('message', '3 front nine tee times created. 1 skipped because they already exist.');
-
-        $this->asAdmin()->post('admin/tee-times/generate', [
-            'league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'back', 'start' => '16:02', 'increment' => '8', 'count' => '3',
-        ])->assertSessionHas('message', '3 back nine tee times created.');
-
-        $times = static fn (string $nine) => array_column(
-            (new TeeTimeModel())->where('league_id', $leagueId)->where('nine', $nine)->orderBy('tee_time')->findAll(),
-            'tee_time'
-        );
-        $this->assertSame(['16:00', '16:10', '16:20', '16:30'], $times('front'));
-        $this->assertSame(['16:02', '16:10', '16:18'], $times('back'));
-
-        // Running past midnight creates nothing.
-        $this->asAdmin()->post('admin/tee-times/generate', [
-            'league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'back', 'start' => '23:50', 'increment' => '10', 'count' => '3',
-        ])->assertSessionHas('error');
-        $this->assertCount(3, $times('back'));
-
-        // The list doesn't repeat the league chosen at the top.
-        $this->asAdmin()->get("admin/tee-times?league_id={$leagueId}")->assertDontSee('<th>League</th>');
-    }
-
-    public function testDeleteAllTeeTimesClearsThemFromGroups(): void
-    {
-        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
-        $otherId  = (new LeagueModel())->insert(['name' => 'Other']);
-        $courseId = (new CourseModel())->insert(['name' => 'Course']);
-        $teeTimes = new TeeTimeModel();
-        $front    = $teeTimes->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'front', 'tee_time' => '16:00']);
-        $teeTimes->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'back', 'tee_time' => '16:02']);
-        $other = $teeTimes->insert(['league_id' => $otherId, 'course_id' => $courseId, 'nine' => 'front', 'tee_time' => '16:00']);
-        $db    = db_connect();
-        $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 1, 'front_tee_time_id' => $front, 'active' => 1]);
-        $groupId = $db->insertID();
-
-        $this->asAdmin()->post('admin/tee-times/delete-all', ['league_id' => $leagueId])
-            ->assertSessionHas('message', '2 tee times deleted. Groups that used them need their tee times set again.');
-
-        $this->assertSame(0, (new TeeTimeModel())->where('league_id', $leagueId)->countAllResults());
-        $this->seeInDatabase('tee_times', ['id' => $other]);
-        $this->seeInDatabase('league_groups', ['id' => $groupId, 'front_tee_time_id' => null]);
-    }
-
-    public function testTeeTimeListShowsAssignedGroup(): void
-    {
-        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
-        $courseId = (new CourseModel())->insert(['name' => 'Course']);
-        $teeTimes = new TeeTimeModel();
-        $front    = $teeTimes->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'front', 'tee_time' => '16:00']);
-        $back     = $teeTimes->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'back', 'tee_time' => '16:02']);
-        $teeTimes->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'front', 'tee_time' => '16:10']);
-        db_connect()->table('league_groups')->insert([
-            'league_id' => $leagueId, 'group_number' => 5, 'front_tee_time_id' => $front, 'back_tee_time_id' => $back, 'active' => 1,
-        ]);
-
-        $html = $this->asAdmin()->get("admin/tee-times?league_id={$leagueId}")->getBody();
-        // Course, Front or back, Time, Group, then Edit.
-        $this->assertMatchesRegularExpression('#<td>Course</td>\s*<td>Front</td>\s*<td>16:00</td>\s*<td>Group 5</td>\s*<td class="row-actions">\s*<a [^>]*>Edit</a>#', $html);
-        $this->assertMatchesRegularExpression('#<td>Back</td>\s*<td>16:02</td>\s*<td>Group 5</td>#', $html);
-        $this->assertMatchesRegularExpression('#<td>Front</td>\s*<td>16:10</td>\s*<td>None</td>#', $html);
-    }
-
     public function testCreateGroupsForPlayersMakesEmptyNumberedGroups(): void
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'League']);
@@ -538,28 +502,23 @@ final class AdminScreensTest extends CIUnitTestCase
         // 9 players need 3 groups; 1 exists, so groups 2 and 3 are created, empty.
         $this->asAdmin()->post('admin/groups/generate', ['league_id' => $leagueId])
             ->assertSessionHas('message', '9 registered players need 3 groups of 4. Created 2 (groups 2–3). Set their tee times and players on each group.');
-        $this->seeInDatabase('league_groups', ['league_id' => $leagueId, 'group_number' => 3, 'nine' => 'front', 'front_tee_time_id' => null, 'player1_id' => null]);
+        $this->seeInDatabase('league_groups', ['league_id' => $leagueId, 'group_number' => 3, 'nine' => 'front', 'front_tee_time' => null, 'player1_id' => null]);
 
         $this->asAdmin()->post('admin/groups/generate', ['league_id' => $leagueId])
             ->assertSessionHas('message', '9 registered players need 3 groups of 4. The league already has 3 groups, so none were created.');
     }
 
-    public function testGroupFormOffersAnyTeeTimeButOnlyUnassignedPlayers(): void
+    public function testGroupFormOffersOnlyUnassignedPlayers(): void
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'League']);
         $otherId  = (new LeagueModel())->insert(['name' => 'Other']);
-        $courseId = (new CourseModel())->insert(['name' => 'Course']);
-        $teeTimes = new TeeTimeModel();
-        $f1 = $teeTimes->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'front', 'tee_time' => '16:00']);
-        $f2 = $teeTimes->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'front', 'tee_time' => '16:10']);
-        $b1 = $teeTimes->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'back', 'tee_time' => '16:02']);
-        $teeTimes->insert(['league_id' => $otherId, 'course_id' => $courseId, 'nine' => 'front', 'tee_time' => '17:00']);
-        $players = new PlayerModel();
+        $players  = new PlayerModel();
         $ann = $players->insert(['first_name' => 'Ann', 'last_name' => 'Ames', 'league_id' => $leagueId]);
         $bob = $players->insert(['first_name' => 'Bob', 'last_name' => 'Baker', 'league_id' => $leagueId]);
         $players->insert(['first_name' => 'Cy', 'last_name' => 'Elsewhere', 'league_id' => $otherId]);
         $db = db_connect();
-        $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 1, 'front_tee_time_id' => $f1, 'player1_id' => $ann, 'active' => 1]);
+        $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 1, 'player1_id' => $ann, 'active' => 1]);
+        $group1 = $db->insertID();
         $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 2, 'active' => 1]);
         $group2 = $db->insertID();
 
@@ -571,28 +530,21 @@ final class AdminScreensTest extends CIUnitTestCase
             return array_combine($m[1], $m[2]);
         };
 
+        // Ann is in group 1, so group 2 isn't offered her; nor anyone from the other league.
         $html = $this->asAdmin()->get("admin/groups/{$group2}/edit")->getBody();
-        // Every front/back tee time of the league is offered, even 16:00 which
-        // group 1 has; Ann is in group 1, so she isn't offered. Nothing from
-        // the other league is offered.
-        $this->assertSame([(string) $f1 => 'Front 16:00', (string) $f2 => 'Front 16:10'], $options($html, 'front_tee_time_id'));
-        $this->assertSame([(string) $b1 => 'Back 16:02'], $options($html, 'back_tee_time_id'));
         $this->assertSame([(string) $bob => 'Baker, Bob'], $options($html, 'player1_id'));
 
-        // Group 1's own edit page still offers its own tee time and player.
-        $html = $this->asAdmin()->get('admin/groups/' . ($group2 - 1) . '/edit')->getBody();
-        $this->assertSame([(string) $f1 => 'Front 16:00', (string) $f2 => 'Front 16:10'], $options($html, 'front_tee_time_id'));
+        // Group 1's own edit page still offers its own player.
+        $html = $this->asAdmin()->get("admin/groups/{$group1}/edit")->getBody();
         $this->assertSame([(string) $ann => 'Ames, Ann', (string) $bob => 'Baker, Bob'], $options($html, 'player1_id'));
     }
 
-    public function testSavingAGroupRefusesPlayersAnotherGroupHasButAllowsSharedTeeTimes(): void
+    public function testSavingAGroupRefusesPlayersAnotherGroupHas(): void
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'League']);
-        $courseId = (new CourseModel())->insert(['name' => 'Course']);
-        $f1       = (new TeeTimeModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'front', 'tee_time' => '16:00']);
         $ann      = (new PlayerModel())->insert(['first_name' => 'Ann', 'last_name' => 'Ames', 'league_id' => $leagueId]);
         $db       = db_connect();
-        $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 1, 'front_tee_time_id' => $f1, 'player1_id' => $ann, 'active' => 1]);
+        $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 1, 'front_tee_time' => '16:00', 'player1_id' => $ann, 'active' => 1]);
         $group1 = $db->insertID();
         $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 2, 'active' => 1]);
         $group2 = $db->insertID();
@@ -602,13 +554,8 @@ final class AdminScreensTest extends CIUnitTestCase
             ->assertSee('Ann Ames is already in group 1.');
         $this->seeInDatabase('league_groups', ['id' => $group2, 'player1_id' => null]);
 
-        // A tee time group 1 has can be given to group 2 as well.
-        $this->asAdmin()->post("admin/groups/{$group2}", $base + ['front_tee_time_id' => $f1])
-            ->assertRedirectTo('/admin/groups');
-        $this->seeInDatabase('league_groups', ['id' => $group2, 'front_tee_time_id' => $f1]);
-
-        // Group 1 can still be saved with its own tee time and player.
-        $this->asAdmin()->post("admin/groups/{$group1}", ['league_id' => $leagueId, 'group_number' => '1', 'nine' => 'back', 'front_tee_time_id' => $f1, 'player1_id' => $ann, 'active' => '1'])
+        // Group 1 can still be saved with its own player.
+        $this->asAdmin()->post("admin/groups/{$group1}", ['league_id' => $leagueId, 'group_number' => '1', 'nine' => 'back', 'front_tee_time' => '16:00', 'player1_id' => $ann, 'active' => '1'])
             ->assertRedirectTo('/admin/groups');
         $this->seeInDatabase('league_groups', ['id' => $group1, 'nine' => 'back']);
     }
@@ -811,13 +758,12 @@ final class AdminScreensTest extends CIUnitTestCase
         $courseId = (new CourseModel())->insert(['name' => 'Course']);
         (new HoleModel())->insert(['course_id' => $courseId, 'number' => 1, 'nine' => 'front', 'white_par' => 4]);
         $gameId   = (new \App\Models\GameModel())->insert(['league_id' => $leagueId, 'name' => 'Stroke play']);
-        $teeTime  = (new TeeTimeModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'front', 'tee_time' => '16:00']);
         $roundId  = (new RoundModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'game_id' => $gameId, 'round_date' => '2027-05-03']);
         $players  = new PlayerModel();
         $plain    = (int) $players->insert(['first_name' => 'Ann', 'last_name' => 'A', 'league_id' => $leagueId]);
         $admin    = (int) $players->insert(['first_name' => 'Bo', 'last_name' => 'B', 'league_id' => $leagueId, 'is_admin' => 1]);
         $shared   = (int) $players->insert(['first_name' => 'Cy', 'last_name' => 'C', 'league_id' => $leagueId]);
-        $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 1, 'front_tee_time_id' => $teeTime, 'player1_id' => $plain, 'active' => 1]);
+        $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 1, 'front_tee_time' => '16:00', 'player1_id' => $plain, 'active' => 1]);
         $db->table('scores')->insert(['league_id' => $leagueId, 'player_id' => $plain, 'round_id' => $roundId]);
         // Cy also plays in the other league, so is kept.
         $otherRound = (new RoundModel())->insert(['league_id' => $otherId, 'course_id' => $courseId, 'round_date' => '2027-05-03']);
@@ -830,9 +776,9 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->seeInDatabase('rounds', ['id' => $roundId]);
 
         $this->asAdmin()->post("admin/leagues/{$leagueId}/reset", ['confirm' => 'RESET'])
-            ->assertSessionHas('message', 'League was reset: deleted 1 scores, 1 groups, 1 rounds, 1 tee times, 1 players. 2 players were kept (admins, or players used in another league). Courses, holes and games were not changed.');
+            ->assertSessionHas('message', 'League was reset: deleted 1 scores, 1 groups, 1 rounds, 1 players. 2 players were kept (admins, or players used in another league). Courses, holes and games were not changed.');
 
-        foreach (['scores', 'league_groups', 'rounds', 'tee_times'] as $table) {
+        foreach (['scores', 'league_groups', 'rounds'] as $table) {
             $this->assertSame(0, $db->table($table)->where('league_id', $leagueId)->countAllResults(), "{$table} left behind");
         }
         $this->dontSeeInDatabase('players', ['id' => $plain]);

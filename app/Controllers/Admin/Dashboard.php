@@ -13,7 +13,7 @@ class Dashboard extends BaseController
         $db       = db_connect();
         $leagueId = Lookup::currentLeagueId();
         $counts   = [];
-        foreach (['leagues', 'courses', 'tee_times', 'players', 'league_groups', 'games', 'rounds', 'scores'] as $table) {
+        foreach (['leagues', 'courses', 'players', 'league_groups', 'games', 'rounds', 'scores'] as $table) {
             $counts[$table] = $db->table($table)->countAllResults();
         }
 

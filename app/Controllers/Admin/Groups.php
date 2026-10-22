@@ -6,7 +6,6 @@ use App\Libraries\Lookup;
 use App\Models\LeagueGroupModel;
 use App\Models\LeagueModel;
 use App\Models\PlayerModel;
-use App\Models\TeeTimeModel;
 
 class Groups extends CrudController
 {
@@ -14,13 +13,14 @@ class Groups extends CrudController
     protected string $title      = 'Groups';
     protected string $singular   = 'Group';
     protected string $baseRoute  = 'admin/groups';
-    protected array $listColumns = ['group_number', 'nine', 'front_tee_time_id', 'back_tee_time_id', 'player1_id', 'player2_id', 'player3_id', 'player4_id', 'active'];
+    // "tee_time" is the tee time for the nine the group is playing now.
+    protected array $listColumns = ['group_number', 'nine', 'tee_time', 'player1_id', 'player2_id', 'player3_id', 'player4_id', 'active'];
     protected array $filters     = ['league_id'];
     // Clicking a group's Front/Back on the list switches it to the other nine.
     protected array $toggleColumns = ['nine' => 'admin/groups/{id}/switch-nine'];
     protected array $orderBy     = ['group_number' => 'ASC'];
     protected ?string $extraIndexView = 'admin/groups/tools';
-    protected array $headActions      = ['Switch front/back' => '#switch-nine', 'Create groups for players' => '#create-groups', 'Delete all groups' => '#delete-groups'];
+    protected array $headActions      = ['Switch front/back' => '#switch-nine', 'Shift tee times' => '#shift-tee-times', 'Create groups for players' => '#create-groups', 'Delete all groups' => '#delete-groups'];
 
     // Players in a group, for working out how many groups a league needs.
     public const PLAYERS_PER_GROUP = 4;
@@ -32,8 +32,8 @@ class Groups extends CrudController
             'group_number'      => ['label' => 'Group number', 'type' => 'number', 'required' => true],
             'nine'              => ['label' => 'Playing', 'type' => 'select', 'options' => ['front' => 'Front nine', 'back' => 'Back nine'], 'listOptions' => ['front' => 'Front', 'back' => 'Back'], 'default' => 'front', 'required' => true,
                 'help' => 'The nine this group is playing now. Use "Switch front/back for all groups" on the Groups page to swap every group between rounds.'],
-            'front_tee_time_id' => ['label' => 'Front nine tee time', 'type' => 'select', 'options' => 'teeTimes', 'listOptions' => 'teeTimesShort'],
-            'back_tee_time_id'  => ['label' => 'Back nine tee time', 'type' => 'select', 'options' => 'teeTimes', 'listOptions' => 'teeTimesShort'],
+            'front_tee_time'    => ['label' => 'Front nine tee time', 'type' => 'time', 'compact' => 'tee'],
+            'back_tee_time'     => ['label' => 'Back nine tee time', 'type' => 'time', 'compact' => 'tee'],
         ];
         for ($i = 1; $i <= 6; $i++) {
             $fields["player{$i}_id"] = ['label' => "Player {$i}", 'type' => 'select', 'options' => 'players', 'listOptions' => 'playersShort'];
@@ -43,29 +43,32 @@ class Groups extends CrudController
         return $fields;
     }
 
+    protected function listFields(): array
+    {
+        return ['tee_time' => ['label' => 'Tee time']];
+    }
+
     /**
-     * On the add/edit form, offer the league's front nine tee times for the
-     * front tee time and back nine tee times for the back one (any of them,
-     * even if another group has it), and only the league's registered
-     * players who are not in another group (plus this group's own).
+     * The list shows only the tee time for the nine each group is playing.
+     */
+    protected function listRows(array $rows, array $filterValues): array
+    {
+        foreach ($rows as &$row) {
+            $row['tee_time'] = $row['nine'] === 'back' ? $row['back_tee_time'] : $row['front_tee_time'];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * On the add/edit form, offer only the league's registered players who
+     * are not in another group (plus this group's own).
      */
     protected function formFields(array $record, ?int $id): array
     {
         $fields   = $this->resolvedFields();
         $leagueId = (int) ($record['league_id'] ?? 0) ?: Lookup::currentLeagueId();
         $taken    = $this->playersInOtherGroups((int) $leagueId, $id);
-
-        $teeTimes = (new TeeTimeModel())->where('league_id', $leagueId)->orderBy('tee_time')->findAll();
-        foreach (['front', 'back'] as $nine) {
-            $field   = "{$nine}_tee_time_id";
-            $options = [];
-            foreach ($teeTimes as $teeTime) {
-                if ($teeTime['nine'] === $nine) {
-                    $options[(int) $teeTime['id']] = ucfirst($nine) . ' ' . $teeTime['tee_time'];
-                }
-            }
-            $fields[$field]['options'] = $options;
-        }
 
         $current = [];
         for ($i = 1; $i <= 6; $i++) {
@@ -160,6 +163,49 @@ class Groups extends CrudController
         $range   = $created === 1 ? "group {$first}" : "groups {$first}–" . ($number - 1);
 
         return $back->with('message', "{$summary} Created {$created} ({$range}). Set their tee times and players on each group.");
+    }
+
+    /**
+     * Moves the front nine (or back nine) tee time of every group in a league
+     * earlier or later by a number of minutes, e.g. for daylight changes.
+     * Groups without that tee time are skipped. Nothing changes if any time
+     * would move past midnight.
+     */
+    public function shiftTeeTimes()
+    {
+        $leagueId = (int) $this->request->getPost('league_id');
+        $nine     = (string) $this->request->getPost('nine');
+        $minutes  = (int) $this->request->getPost('minutes');
+        $back     = redirect()->to($this->baseRoute . '?league_id=' . $leagueId);
+        if ($leagueId <= 0 || ! in_array($nine, ['front', 'back'], true) || $minutes === 0) {
+            return $back->with('error', 'Choose a league and a number of minutes other than 0.');
+        }
+
+        $field  = "{$nine}_tee_time";
+        $model  = new LeagueGroupModel();
+        $groups = $model->where('league_id', $leagueId)->where("{$field} IS NOT NULL")->findAll();
+        $moved  = [];
+        foreach ($groups as $group) {
+            if (! preg_match('/^(\d{2}):(\d{2})$/', (string) $group[$field], $m)) {
+                continue;
+            }
+            $total = (int) $m[1] * 60 + (int) $m[2] + $minutes;
+            if ($total < 0 || $total >= 24 * 60) {
+                return $back->with('error', "Shifting by {$minutes} minutes would move group {$group['group_number']}'s {$nine} nine tee time ({$group[$field]}) past midnight. Nothing was changed.");
+            }
+            $moved[$group['id']] = sprintf('%02d:%02d', intdiv($total, 60), $total % 60);
+        }
+
+        $db = db_connect();
+        $db->transStart();
+        foreach ($moved as $id => $time) {
+            $model->update($id, [$field => $time]);
+        }
+        $db->transComplete();
+
+        $direction = $minutes > 0 ? 'later' : 'earlier';
+
+        return $back->with('message', count($moved) . " groups' {$nine} nine tee times moved " . abs($minutes) . " minutes {$direction}.");
     }
 
     /**

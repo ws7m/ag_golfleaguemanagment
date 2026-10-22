@@ -6,7 +6,6 @@ use App\Models\HoleModel;
 use App\Models\LeagueModel;
 use App\Models\PlayerModel;
 use App\Models\ScoreModel;
-use App\Models\TeeTimeModel;
 use CodeIgniter\Database\Exceptions\DatabaseException;
 use CodeIgniter\Test\CIUnitTestCase;
 use CodeIgniter\Test\DatabaseTestTrait;
@@ -25,10 +24,17 @@ final class Phase1SchemaTest extends CIUnitTestCase
 
     public function testAllPhase1TablesExist(): void
     {
-        foreach (['leagues', 'courses', 'holes', 'players', 'tee_times', 'league_groups',
+        // Ask SQLite directly: CodeIgniter's tableExists() can answer from a
+        // stale cache after a migration drops a table.
+        $exists = fn (string $table) => (int) $this->db
+            ->query("SELECT count(*) AS n FROM sqlite_master WHERE type = 'table' AND name = ?", [$this->db->prefixTable($table)])
+            ->getRow()->n === 1;
+
+        foreach (['leagues', 'courses', 'holes', 'players', 'league_groups',
             'games', 'rounds', 'scores', 'settings'] as $table) {
-            $this->assertTrue($this->db->tableExists($table), "Missing table {$table}");
+            $this->assertTrue($exists($table), "Missing table {$table}");
         }
+        $this->assertFalse($exists('tee_times'), 'Tee times are stored on groups now');
     }
 
     public function testNewPlayerGetsUniqueThreeDigitMemberNumber(): void
@@ -90,16 +96,6 @@ final class Phase1SchemaTest extends CIUnitTestCase
 
         $this->expectException(DatabaseException::class);
         $courses->delete($courseId);
-    }
-
-    public function testInvalidTeeTimeIsRejected(): void
-    {
-        $leagueId = (new LeagueModel())->insert(['name' => '2027 League']);
-        $courseId = (new CourseModel())->insert(['name' => 'Home Course']);
-        $teeTimes = new TeeTimeModel();
-
-        $this->assertNotFalse($teeTimes->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'front', 'tee_time' => '15:10']));
-        $this->assertFalse($teeTimes->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'front', 'tee_time' => '3:10pm']));
     }
 
     public function testGrossIsOnlyTotalledWhenEveryHoleOfTheNineIsEntered(): void

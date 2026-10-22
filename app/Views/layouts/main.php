@@ -13,7 +13,6 @@
         <nav class="nav">
             <a href="<?= site_url('admin/leagues') ?>">Leagues</a>
             <a href="<?= site_url('admin/courses') ?>">Courses</a>
-            <a href="<?= site_url('admin/tee-times') ?>">Tee times</a>
             <a href="<?= site_url('admin/players') ?>">Players</a>
             <a href="<?= site_url('admin/groups') ?>">Groups</a>
             <a href="<?= site_url('admin/games') ?>">Games</a>

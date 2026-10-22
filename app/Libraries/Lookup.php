@@ -67,27 +67,6 @@ class Lookup
         return self::labels($rows, static fn ($r) => "{$r['name']} ({$r['league']})");
     }
 
-    public static function teeTimes(): array
-    {
-        $rows = db_connect()->table('tee_times t')
-            ->select('t.id, t.nine, t.tee_time, l.name AS league')
-            ->join('leagues l', 'l.id = t.league_id')
-            ->orderBy('l.start_date', 'DESC')->orderBy('t.nine', 'DESC')->orderBy('t.tee_time')
-            ->get()->getResultArray();
-
-        return self::labels($rows, static fn ($r) => ucfirst($r['nine']) . " {$r['tee_time']} ({$r['league']})");
-    }
-
-    /**
-     * Short tee time labels for list pages, without the league.
-     */
-    public static function teeTimesShort(): array
-    {
-        $rows = db_connect()->table('tee_times')->select('id, nine, tee_time')->get()->getResultArray();
-
-        return self::labels($rows, static fn ($r) => ucfirst($r['nine']) . " {$r['tee_time']}");
-    }
-
     public static function groups(): array
     {
         $rows = db_connect()->table('league_groups g')

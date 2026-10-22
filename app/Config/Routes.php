@@ -24,7 +24,6 @@ $routes->group('admin', ['filter' => 'adminauth', 'namespace' => 'App\Controller
     $screens = [
         'leagues'   => 'Leagues',
         'courses'   => 'Courses',
-        'tee-times' => 'TeeTimes',
         'players'   => 'Players',
         'groups'    => 'Groups',
         'games'     => 'Games',
@@ -52,11 +51,9 @@ $routes->group('admin', ['filter' => 'adminauth', 'namespace' => 'App\Controller
     $routes->post('courses/(:num)/holes', 'Holes::update/$1');
     $routes->get('courses/(:num)/export', 'Courses::export/$1');
     $routes->post('courses/(:num)/import', 'Courses::import/$1');
-    $routes->post('tee-times/shift', 'TeeTimes::shift');
-    $routes->post('tee-times/generate', 'TeeTimes::generate');
-    $routes->post('tee-times/delete-all', 'TeeTimes::deleteAll');
     $routes->post('groups/generate', 'Groups::generate');
     $routes->post('groups/switch-nine', 'Groups::switchNine');
+    $routes->post('groups/shift-tee-times', 'Groups::shiftTeeTimes');
     $routes->post('groups/(:num)/switch-nine', 'Groups::switchGroupNine/$1');
     $routes->post('groups/delete-all', 'Groups::deleteAll');
     $routes->get('settings', 'Settings::edit');
