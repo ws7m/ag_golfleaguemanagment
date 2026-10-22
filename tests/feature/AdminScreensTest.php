@@ -342,14 +342,16 @@ final class AdminScreensTest extends CIUnitTestCase
 
         $this->asAdmin()->get("admin/groups?league_id={$leagueId}")->assertSee('admin/groups/tee-sheet');
 
-        $html = $this->asAdmin()->get("admin/groups/tee-sheet?league_id={$leagueId}&date=5/4/2027")->getBody();
+        // The date picker sends YYYY-MM-DD; the lists show it as 5/4/2027.
+        $html = $this->asAdmin()->get("admin/groups/tee-sheet?league_id={$leagueId}&date=2027-05-04")->getBody();
+        $this->assertStringContainsString('type="date" id="sheet_date" name="date" value="2027-05-04"', $html);
         $text = trim((string) preg_replace('/\s+/', ' ', preg_replace('/<[^>]+>/', ' ', $html)));
 
         // One line per tee time, earliest first: time, then "First Last, First Last".
         // Group 3 plays the back nine, so its front time (15:00) isn't shown;
         // inactive group 4 isn't listed.
-        $this->assertStringContainsString('Tee time list - Front - 5/4/2027 16:00 Cy Cole 16:10 Ann Ames, Bob Baker', $text);
-        $this->assertStringContainsString('Tee time list - Back - 5/4/2027 16:02', $text);
+        $this->assertStringContainsString('Monday League - Tee time list - Front - 5/4/2027 16:00 Cy Cole 16:10 Ann Ames, Bob Baker', $text);
+        $this->assertStringContainsString('Monday League - Tee time list - Back - 5/4/2027 16:02', $text);
         $this->assertStringContainsString('TeeTimeList-Front-5-4-2027.pdf', $text);
         $this->assertStringNotContainsString('15:00', $text);
         $this->assertStringNotContainsString('15:30', $text);
@@ -361,10 +363,10 @@ final class AdminScreensTest extends CIUnitTestCase
         $cy       = (new PlayerModel())->insert(['first_name' => 'Cy', 'last_name' => 'Cole', 'league_id' => $leagueId]);
         db_connect()->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 1, 'nine' => 'back', 'back_tee_time' => '16:02', 'player1_id' => $cy, 'active' => 1]);
 
-        $result = $this->asAdmin()->get("admin/groups/tee-sheet/pdf?league_id={$leagueId}&nine=back&date=" . rawurlencode('May 4, 2027'));
+        $result = $this->asAdmin()->get("admin/groups/tee-sheet/pdf?league_id={$leagueId}&nine=back&date=2027-05-04");
         $result->assertOK();
         $result->assertHeader('Content-Type', 'application/pdf');
-        $result->assertHeader('Content-Disposition', 'attachment; filename="TeeTimeList-Back-May-4-2027.pdf"');
+        $result->assertHeader('Content-Disposition', 'attachment; filename="TeeTimeList-Back-5-4-2027.pdf"');
         // response()->getBody(): the test response's own getBody() returns the
         // body after an HTML parser has read it, which mangles a PDF.
         $this->assertStringStartsWith('%PDF-', $result->response()->getBody());
@@ -379,7 +381,12 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->assertSame('TeeTimeList-Front-etc-passwd.pdf', $name('front', '../../etc/passwd'));
         $this->assertSame('TeeTimeList-Front-2027-05-04.pdf', $name('front', '2027-05-04'));
         $this->assertSame('TeeTimeList-Back-undated.pdf', $name('back', '///'));
-        $this->assertSame('Tee time list - Back - 5/4/2027', \App\Controllers\Admin\Groups::teeSheetHeading('back', '5/4/2027'));
+        $this->assertSame('Monday League - Tee time list - Back - 5/4/2027', \App\Controllers\Admin\Groups::teeSheetHeading('Monday League', 'back', '5/4/2027'));
+
+        // A date that isn't a real calendar date falls back to today.
+        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
+        $html     = $this->asAdmin()->get("admin/groups/tee-sheet?league_id={$leagueId}&date=2027-02-30")->getBody();
+        $this->assertStringContainsString('value="' . date('Y-m-d') . '"', $html);
     }
 
     public function testGroupTeeTimesAreSavedAndChecked(): void

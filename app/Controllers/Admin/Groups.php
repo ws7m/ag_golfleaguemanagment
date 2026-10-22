@@ -6,6 +6,7 @@ use App\Libraries\Lookup;
 use App\Models\LeagueGroupModel;
 use App\Models\LeagueModel;
 use App\Models\PlayerModel;
+use DateTimeImmutable;
 use Dompdf\Dompdf;
 
 class Groups extends CrudController
@@ -179,12 +180,13 @@ class Groups extends CrudController
      */
     public function teeSheet(): string
     {
-        [$leagueId, $league, $date] = $this->teeSheetRequest();
+        [$leagueId, $league, $isoDate, $date] = $this->teeSheetRequest();
 
         return view('admin/groups/tee_sheet', [
             'title'    => 'Tee time list',
             'league'   => $league,
             'leagues'  => Lookup::leagues(),
+            'isoDate'  => $isoDate,
             'date'     => $date,
             'sections' => [
                 'front' => $this->teeSheetRows($leagueId, 'front'),
@@ -199,11 +201,11 @@ class Groups extends CrudController
      */
     public function teeSheetPdf()
     {
-        [$leagueId, , $date] = $this->teeSheetRequest();
+        [$leagueId, $league, , $date] = $this->teeSheetRequest();
         $nine = $this->request->getGet('nine') === 'back' ? 'back' : 'front';
 
         $html = view('admin/groups/tee_sheet_pdf', [
-            'heading' => self::teeSheetHeading($nine, $date),
+            'heading' => self::teeSheetHeading($league['name'] ?? '', $nine, $date),
             'rows'    => $this->teeSheetRows($leagueId, $nine),
         ]);
 
@@ -219,11 +221,13 @@ class Groups extends CrudController
     }
 
     /**
-     * "Tee time list - Front - 5/4/2027"
+     * "Monday Mongrels - 2027 - Tee time list - Front - 5/4/2027"
      */
-    public static function teeSheetHeading(string $nine, string $date): string
+    public static function teeSheetHeading(string $leagueName, string $nine, string $date): string
     {
-        return trim('Tee time list - ' . ucfirst($nine) . ($date !== '' ? " - {$date}" : ''));
+        $parts = [trim($leagueName), 'Tee time list', ucfirst($nine), trim($date)];
+
+        return implode(' - ', array_filter($parts, static fn ($p) => $p !== ''));
     }
 
     /**
@@ -239,18 +243,21 @@ class Groups extends CrudController
     }
 
     /**
-     * League id, league and the date to show, from the query string. The
-     * date is whatever the admin typed (today's date if blank), up to 40
-     * characters.
+     * League id, league and the date from the query string. The date comes
+     * from a date picker as YYYY-MM-DD (today if missing or not a real date)
+     * and is shown as month/day/year, e.g. 5/4/2027.
      *
-     * @return array{0: int, 1: ?array, 2: string}
+     * @return array{0: int, 1: ?array, 2: string, 3: string} league id, league, YYYY-MM-DD, display date
      */
     private function teeSheetRequest(): array
     {
         $leagueId = (int) ($this->request->getGet('league_id') ?: Lookup::currentLeagueId());
-        $date     = trim((string) $this->request->getGet('date'));
+        $picked   = DateTimeImmutable::createFromFormat('!Y-m-d', (string) $this->request->getGet('date'));
+        $date     = $picked !== false && $picked->format('Y-m-d') === $this->request->getGet('date')
+            ? $picked
+            : new DateTimeImmutable('today');
 
-        return [$leagueId, (new LeagueModel())->find($leagueId), mb_substr($date !== '' ? $date : date('n/j/Y'), 0, 40)];
+        return [$leagueId, (new LeagueModel())->find($leagueId), $date->format('Y-m-d'), $date->format('n/j/Y')];
     }
 
     /**
