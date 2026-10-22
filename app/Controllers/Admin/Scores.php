@@ -15,6 +15,8 @@ class Scores extends CrudController
     protected array $listColumns = ['round_id', 'player_id', 'group_id', 'nine', 'playing', 'paid', 'gross', 'net', 'place', 'winnings_cents'];
     protected array $filters     = ['round_id'];
     protected array $orderBy     = ['round_id' => 'DESC', 'player_id' => 'ASC'];
+    protected ?string $extraIndexView = 'admin/scores/tools';
+    protected array $headActions      = ['Delete all scores' => '#delete-scores'];
 
     protected function fields(): array
     {
@@ -39,6 +41,34 @@ class Scores extends CrudController
             'winnings_cents' => ['label' => 'Winnings', 'type' => 'money', 'compact' => 'results'],
             'image'          => ['label' => 'Scorecard picture', 'help' => 'Picture uploads come later; for now a file name or link.'],
         ];
+    }
+
+    /**
+     * Deletes the scores for one round, or for every round in a league, so
+     * the admin can start over. Scores are not used by anything else.
+     */
+    public function deleteAll()
+    {
+        $leagueId = (int) $this->request->getPost('league_id');
+        $roundId  = (int) $this->request->getPost('round_id');
+        $back     = redirect()->to($this->baseRoute . ($roundId ? '?round_id=' . $roundId : ''));
+
+        $round = $roundId ? (new RoundModel())->find($roundId) : null;
+        if ($roundId && $round === null) {
+            return $back->with('error', 'That round was not found.');
+        }
+        if ($round === null && $leagueId <= 0) {
+            return $back->with('error', 'Choose a league or a round.');
+        }
+
+        $query = db_connect()->table('scores');
+        $round ? $query->where('round_id', $roundId) : $query->where('league_id', $leagueId);
+        $query->delete();
+        $count = db_connect()->affectedRows();
+
+        $from = $round ? 'the ' . trim("{$round['round_date']} {$round['name']}") . ' round' : 'every round in the league';
+
+        return $back->with('message', "{$count} scores deleted from {$from}.");
     }
 
     public function new(): string
