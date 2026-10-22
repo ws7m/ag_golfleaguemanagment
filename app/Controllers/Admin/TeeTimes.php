@@ -11,7 +11,7 @@ class TeeTimes extends CrudController
     protected string $singular       = 'Tee time';
     protected string $baseRoute      = 'admin/tee-times';
     // No league column: the list is filtered by league at the top.
-    protected array $listColumns     = ['course_id', 'nine', 'group', 'tee_time'];
+    protected array $listColumns     = ['course_id', 'nine', 'tee_time', 'group'];
     protected array $filters         = ['league_id'];
     protected array $orderBy         = ['nine' => 'DESC', 'tee_time' => 'ASC'];
     protected ?string $extraIndexView = 'admin/tee_times/tools';

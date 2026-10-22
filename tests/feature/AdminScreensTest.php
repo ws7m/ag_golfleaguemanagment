@@ -519,9 +519,10 @@ final class AdminScreensTest extends CIUnitTestCase
         ]);
 
         $html = $this->asAdmin()->get("admin/tee-times?league_id={$leagueId}")->getBody();
-        $this->assertMatchesRegularExpression('#<td>Front</td>\s*<td>Group 5</td>\s*<td>16:00</td>#', $html);
-        $this->assertMatchesRegularExpression('#<td>Back</td>\s*<td>Group 5</td>\s*<td>16:02</td>#', $html);
-        $this->assertMatchesRegularExpression('#<td>Front</td>\s*<td>None</td>\s*<td>16:10</td>#', $html);
+        // Course, Front or back, Time, Group, then Edit.
+        $this->assertMatchesRegularExpression('#<td>Course</td>\s*<td>Front</td>\s*<td>16:00</td>\s*<td>Group 5</td>\s*<td class="row-actions">\s*<a [^>]*>Edit</a>#', $html);
+        $this->assertMatchesRegularExpression('#<td>Back</td>\s*<td>16:02</td>\s*<td>Group 5</td>#', $html);
+        $this->assertMatchesRegularExpression('#<td>Front</td>\s*<td>16:10</td>\s*<td>None</td>#', $html);
     }
 
     public function testCreateGroupsForPlayersMakesEmptyNumberedGroups(): void
