@@ -5,6 +5,7 @@ namespace App\Controllers\Admin;
 use App\Models\LeagueGroupModel;
 use App\Models\LeagueModel;
 use App\Models\PlayerModel;
+use App\Models\TeeTimeModel;
 
 class Groups extends CrudController
 {
@@ -40,10 +41,15 @@ class Groups extends CrudController
     public const PLAYERS_PER_GROUP = 4;
 
     /**
-     * Makes sure a league has enough groups for its registered players, at 4
-     * players to a group: 8 players need 2 groups, 9 need 3. Active groups
-     * the league already has count towards that; new groups are numbered
-     * after the existing ones, start on the front nine and have no players.
+     * Puts every registered player in the league into a group of 4.
+     *
+     * Players who are not yet on an active group's roster (in last name
+     * order) first fill any open places in the league's existing active
+     * groups, then go into new groups of 4 (the last may have fewer). New
+     * groups are numbered after the existing ones, start on the front nine,
+     * and get the league's front and back nine tee times in time order,
+     * starting after the last front tee time already used by a group. When
+     * the tee times run out, assignment starts again from the first one.
      */
     public function generate()
     {
@@ -58,35 +64,103 @@ class Groups extends CrudController
             ->where('league_id', $leagueId)
             ->where('active', 1)
             ->where('is_player', 1)
-            ->countAllResults();
-        if ($registered === 0) {
+            ->orderBy('LOWER(last_name)', 'ASC', false)
+            ->orderBy('LOWER(first_name)', 'ASC', false)
+            ->findAll();
+        if ($registered === []) {
             return $back->with('error', "{$league['name']} has no registered players yet.");
         }
 
-        $needed   = (int) ceil($registered / self::PLAYERS_PER_GROUP);
         $model    = new LeagueGroupModel();
-        $existing = $model->where('league_id', $leagueId)->findAll();
-        $active   = count(array_filter($existing, static fn ($g) => (int) $g['active'] === 1));
-        $summary  = "{$registered} registered players need {$needed} groups of " . self::PLAYERS_PER_GROUP . '.';
+        $existing = $model->where('league_id', $leagueId)->orderBy('group_number')->findAll();
+        $active   = array_values(array_filter($existing, static fn ($g) => (int) $g['active'] === 1));
 
-        if ($active >= $needed) {
-            return $back->with('message', "{$summary} The league already has {$active} active groups, so none were created.");
+        // Players not on any active group's roster yet.
+        $grouped = [];
+        foreach ($active as $group) {
+            foreach (LeagueGroupModel::playerIds($group) as $playerId) {
+                $grouped[$playerId] = true;
+            }
+        }
+        $waiting = array_values(array_filter(
+            array_map(static fn ($p) => (int) $p['id'], $registered),
+            static fn ($id) => ! isset($grouped[$id])
+        ));
+        $summary = count($registered) . ' registered players.';
+        if ($waiting === []) {
+            return $back->with('message', "{$summary} All of them are already in groups, so nothing was changed.");
         }
 
-        $next  = (int) max([0, ...array_column($existing, 'group_number')]) + 1;
-        $first = $next;
+        // Tee times in time order; new groups continue after the last front
+        // tee time an existing group uses, and wrap around to the start.
+        $teeTimes = (new TeeTimeModel())->where('league_id', $leagueId)->orderBy('tee_time')->findAll();
+        $fronts   = array_values(array_filter($teeTimes, static fn ($t) => $t['nine'] === 'front'));
+        $backs    = array_values(array_filter($teeTimes, static fn ($t) => $t['nine'] === 'back'));
+        $usedFront = array_map('intval', array_filter(array_column($active, 'front_tee_time_id')));
+        $slot      = 0;
+        foreach ($fronts as $i => $teeTime) {
+            if (in_array((int) $teeTime['id'], $usedFront, true)) {
+                $slot = $i + 1;
+            }
+        }
 
-        $db = db_connect();
+        $filled  = 0;
+        $created = [];
+        $wrapped = false;
+        $db      = db_connect();
         $db->transStart();
-        for ($i = $active; $i < $needed; $i++) {
-            $model->insert(['league_id' => $leagueId, 'group_number' => $next++, 'nine' => 'front', 'active' => 1]);
+
+        // 1. Fill open places in existing active groups.
+        foreach ($active as $group) {
+            $changes = [];
+            for ($i = 1; $i <= self::PLAYERS_PER_GROUP && $waiting !== []; $i++) {
+                if (empty($group["player{$i}_id"])) {
+                    $changes["player{$i}_id"] = array_shift($waiting);
+                    $filled++;
+                }
+            }
+            if ($changes !== []) {
+                $model->update($group['id'], $changes);
+            }
         }
+
+        // 2. New groups of 4 for everyone left.
+        $number = (int) max([0, ...array_column($existing, 'group_number')]) + 1;
+        while ($waiting !== []) {
+            $row = [
+                'league_id'         => $leagueId,
+                'group_number'      => $number,
+                'nine'              => 'front',
+                'front_tee_time_id' => $fronts === [] ? null : (int) $fronts[$slot % count($fronts)]['id'],
+                'back_tee_time_id'  => $backs === [] ? null : (int) $backs[$slot % count($backs)]['id'],
+                'active'            => 1,
+            ];
+            foreach (array_splice($waiting, 0, self::PLAYERS_PER_GROUP) as $i => $playerId) {
+                $row['player' . ($i + 1) . '_id'] = $playerId;
+            }
+            $model->insert($row);
+            $created[] = $number++;
+            $wrapped   = $wrapped || ($fronts !== [] && $slot >= count($fronts)) || ($backs !== [] && $slot >= count($backs));
+            $slot++;
+        }
+
         $db->transComplete();
 
-        $created = $next - $first;
-        $numbers = $created === 1 ? "group {$first}" : 'groups ' . $first . '–' . ($next - 1);
+        $message = $summary;
+        if ($filled > 0) {
+            $message .= " {$filled} placed in open places in existing groups.";
+        }
+        if ($created !== []) {
+            $range    = count($created) === 1 ? "group {$created[0]}" : "groups {$created[0]}–" . end($created);
+            $message .= ' Created ' . count($created) . " groups of up to " . self::PLAYERS_PER_GROUP . " ({$range}).";
+            if ($fronts === [] || $backs === []) {
+                $message .= ' The league has no ' . ($fronts === [] ? 'front' : 'back') . ' nine tee times, so set those on the groups later.';
+            } elseif ($wrapped) {
+                $message .= ' There were more groups than tee times, so tee times were used again from the first one.';
+            }
+        }
 
-        return $back->with('message', "{$summary} Created {$created} ({$numbers}). Add players and tee times to them.");
+        return $back->with('message', $message);
     }
 
     /**

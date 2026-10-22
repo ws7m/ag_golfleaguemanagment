@@ -2,6 +2,7 @@
 
 use App\Models\CourseModel;
 use App\Models\HoleModel;
+use App\Models\LeagueGroupModel;
 use App\Models\LeagueModel;
 use App\Models\PlayerModel;
 use App\Models\RoundModel;
@@ -523,34 +524,81 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->assertMatchesRegularExpression('#<td>Front</td>\s*<td>None</td>\s*<td>16:10</td>#', $html);
     }
 
-    public function testCreateGroupsForRegisteredPlayersAtFourToAGroup(): void
+    /**
+     * @return array{0: int, 1: list<int>, 2: list<int>} League id, front and back tee time ids in time order
+     */
+    private function leagueWithTeeTimes(int $count): array
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'League']);
-        $otherId  = (new LeagueModel())->insert(['name' => 'Other']);
-        $players  = new PlayerModel();
-        for ($i = 1; $i <= 9; $i++) {
-            $players->insert(['first_name' => "P{$i}", 'last_name' => 'Golfer', 'league_id' => $leagueId]);
+        $courseId = (new CourseModel())->insert(['name' => 'Course']);
+        $teeTimes = new TeeTimeModel();
+        $fronts   = [];
+        $backs    = [];
+        for ($i = 0; $i < $count; $i++) {
+            $fronts[] = (int) $teeTimes->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'front', 'tee_time' => sprintf('16:%02d', $i * 10)]);
+            $backs[]  = (int) $teeTimes->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'nine' => 'back', 'tee_time' => sprintf('16:%02d', $i * 10 + 2)]);
         }
-        // Not counted: inactive, another league, or an admin-only account.
+
+        return [$leagueId, $fronts, $backs];
+    }
+
+    public function testCreateGroupsPutsEveryPlayerInAGroupOfFourWithTeeTimesInOrder(): void
+    {
+        [$leagueId, $fronts, $backs] = $this->leagueWithTeeTimes(2);
+        $players = new PlayerModel();
+        $ids     = [];
+        foreach (['Ames', 'Baker', 'Cole', 'Dunn', 'Eads', 'Ford', 'Gray', 'Hale', 'Irwin', 'Jones'] as $last) {
+            $ids[$last] = (int) $players->insert(['first_name' => 'Pat', 'last_name' => $last, 'league_id' => $leagueId]);
+        }
+        // Not placed: inactive, or an admin-only account.
         $players->insert(['first_name' => 'Gone', 'last_name' => 'Away', 'league_id' => $leagueId, 'active' => 0]);
-        $players->insert(['first_name' => 'Elsewhere', 'last_name' => 'X', 'league_id' => $otherId]);
         $players->insert(['first_name' => 'Admin', 'last_name' => 'Only', 'league_id' => $leagueId, 'is_player' => 0]);
-        // One active group already exists, plus an inactive one that doesn't count.
-        $db = db_connect();
-        $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 1, 'active' => 1]);
-        $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 2, 'active' => 0]);
 
-        // 9 players need 3 groups; 1 active group exists, so 2 are created as groups 3 and 4.
+        // 10 players need 3 groups; there are only 2 tee times, so group 3 starts again at the first.
         $this->asAdmin()->post('admin/groups/generate', ['league_id' => $leagueId])
-            ->assertSessionHas('message', '9 registered players need 3 groups of 4. Created 2 (groups 3–4). Add players and tee times to them.');
-        $this->seeInDatabase('league_groups', ['league_id' => $leagueId, 'group_number' => 3, 'nine' => 'front', 'active' => 1]);
-        $this->seeInDatabase('league_groups', ['league_id' => $leagueId, 'group_number' => 4, 'player1_id' => null]);
+            ->assertSessionHas('message', '10 registered players. Created 3 groups of up to 4 (groups 1–3). There were more groups than tee times, so tee times were used again from the first one.');
 
-        // Running it again creates none.
+        $groups = db_connect()->table('league_groups')->where('league_id', $leagueId)->orderBy('group_number')->get()->getResultArray();
+        $this->assertCount(3, $groups);
+        $this->assertSame([$ids['Ames'], $ids['Baker'], $ids['Cole'], $ids['Dunn']], LeagueGroupModel::playerIds($groups[0]));
+        $this->assertSame([$ids['Eads'], $ids['Ford'], $ids['Gray'], $ids['Hale']], LeagueGroupModel::playerIds($groups[1]));
+        $this->assertSame([$ids['Irwin'], $ids['Jones']], LeagueGroupModel::playerIds($groups[2]));
+        $this->assertSame([$fronts[0], $fronts[1], $fronts[0]], array_map('intval', array_column($groups, 'front_tee_time_id')));
+        $this->assertSame([$backs[0], $backs[1], $backs[0]], array_map('intval', array_column($groups, 'back_tee_time_id')));
+        $this->assertSame(['front', 'front', 'front'], array_column($groups, 'nine'));
+
+        // Running it again changes nothing.
         $this->asAdmin()->post('admin/groups/generate', ['league_id' => $leagueId])
-            ->assertSessionHas('message', '9 registered players need 3 groups of 4. The league already has 3 active groups, so none were created.');
+            ->assertSessionHas('message', '10 registered players. All of them are already in groups, so nothing was changed.');
+    }
 
-        // A league with no registered players.
+    public function testCreateGroupsFillsOpenPlacesFirstAndContinuesTeeTimes(): void
+    {
+        [$leagueId, $fronts, $backs] = $this->leagueWithTeeTimes(3);
+        $players = new PlayerModel();
+        $ids     = [];
+        foreach (['Ames', 'Baker', 'Cole', 'Dunn', 'Eads', 'Ford'] as $last) {
+            $ids[$last] = (int) $players->insert(['first_name' => 'Pat', 'last_name' => $last, 'league_id' => $leagueId]);
+        }
+        // Group 1 already has Ames and uses the first tee times.
+        db_connect()->table('league_groups')->insert([
+            'league_id' => $leagueId, 'group_number' => 1, 'front_tee_time_id' => $fronts[0], 'back_tee_time_id' => $backs[0],
+            'player1_id' => $ids['Ames'], 'active' => 1,
+        ]);
+
+        $this->asAdmin()->post('admin/groups/generate', ['league_id' => $leagueId])
+            ->assertSessionHas('message', '6 registered players. 3 placed in open places in existing groups. Created 1 groups of up to 4 (group 2).');
+
+        // Baker, Cole, Dunn fill group 1; Eads and Ford start group 2 on the second tee times.
+        $this->seeInDatabase('league_groups', ['group_number' => 1, 'player1_id' => $ids['Ames'], 'player2_id' => $ids['Baker'], 'player3_id' => $ids['Cole'], 'player4_id' => $ids['Dunn']]);
+        $this->seeInDatabase('league_groups', [
+            'group_number' => 2, 'player1_id' => $ids['Eads'], 'player2_id' => $ids['Ford'], 'player3_id' => null,
+            'front_tee_time_id' => $fronts[1], 'back_tee_time_id' => $backs[1],
+        ]);
+    }
+
+    public function testCreateGroupsNeedsRegisteredPlayers(): void
+    {
         $emptyId = (new LeagueModel())->insert(['name' => 'Empty']);
         $this->asAdmin()->post('admin/groups/generate', ['league_id' => $emptyId])->assertSessionHas('error');
     }

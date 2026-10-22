@@ -25,12 +25,12 @@ $leagueOptions = static function (string $id) use ($fields, $filterValues): stri
 
 <section class="panel" id="create-groups">
     <h2>Create groups for registered players</h2>
-    <p class="muted">Works out how many groups the league needs for its registered players at
-        <?= \App\Controllers\Admin\Groups::PLAYERS_PER_GROUP ?> players to a group (8 players need 2 groups, 9 need 3), and
-        creates any that are missing. Active groups the league already has count towards that. New groups are numbered after
-        the existing ones, start on the front nine, and have no players or tee times yet.</p>
+    <p class="muted">Puts every registered player who isn't in a group yet into a group of
+        <?= \App\Controllers\Admin\Groups::PLAYERS_PER_GROUP ?>, in last name order. Open places in existing groups are
+        filled first, then new groups are created (the last may have fewer players). New groups start on the front nine and get
+        the front and back nine tee times in time order; when the tee times run out they start again from the first one.</p>
     <form method="post" action="<?= site_url('admin/groups/generate') ?>" class="form inline"
-          onsubmit="return confirm('Create the groups needed for this league\'s registered players?')">
+          onsubmit="return confirm('Put every registered player who is not in a group into a group of 4?')">
         <?= csrf_field() ?>
         <label for="gen_group_league">League</label>
         <?= $leagueOptions('gen_group_league') ?>
