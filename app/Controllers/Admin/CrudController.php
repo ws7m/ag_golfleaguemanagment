@@ -128,8 +128,9 @@ abstract class CrudController extends BaseController
             }
         }
         foreach ($this->orderBy as $column => $direction) {
-            // Expressions like LOWER(name) must not be quoted as a column name.
-            $model->orderBy($column, $direction, ! str_contains($column, '('));
+            // Expressions like LOWER(name) or CASE ... END must not be quoted
+            // as a column name.
+            $model->orderBy($column, $direction, ! preg_match('/[\s(]/', $column));
         }
 
         return view('admin/crud/index', $this->viewData([

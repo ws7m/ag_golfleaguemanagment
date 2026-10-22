@@ -18,7 +18,14 @@ class Groups extends CrudController
     protected array $filters     = ['league_id'];
     // Clicking a group's Front/Back on the list switches it to the other nine.
     protected array $toggleColumns = ['nine' => 'admin/groups/{id}/switch-nine'];
-    protected array $orderBy     = ['group_number' => 'ASC'];
+    // Groups playing the front nine first, then the back nine; within each,
+    // by the tee time for that nine (groups without one last), then number.
+    protected array $orderBy = [
+        "CASE WHEN nine = 'back' THEN 1 ELSE 0 END"                                  => 'ASC',
+        "CASE WHEN nine = 'back' THEN back_tee_time ELSE front_tee_time END IS NULL" => 'ASC',
+        "CASE WHEN nine = 'back' THEN back_tee_time ELSE front_tee_time END"         => 'ASC',
+        'group_number'                                                               => 'ASC',
+    ];
     protected ?string $extraIndexView = 'admin/groups/tools';
     protected array $headActions      = ['Switch front/back' => '#switch-nine', 'Shift tee times' => '#shift-tee-times', 'Create groups for players' => '#create-groups', 'Delete all groups' => '#delete-groups'];
 

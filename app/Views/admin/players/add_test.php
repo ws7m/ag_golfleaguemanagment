@@ -2,7 +2,8 @@
 <section class="panel" id="add-test-players">
     <h2>Add test players <span class="muted">(temporary)</span></h2>
     <p class="muted">Adds players named Player1 / 1, Player2 / 2, and so on, continuing after the highest PlayerN already saved.
-        Each logs in with <strong>playerN</strong> and password <strong>playerN</strong> (e.g. player3 / player3).</p>
+        Each logs in with <strong>playerN</strong> and password <strong>playerN</strong> (e.g. player3 / player3), and plays from the
+        white tees in flight 2 with a handicap of 10.</p>
     <form method="post" action="<?= site_url('admin/players/add-test') ?>" class="form inline"
           onsubmit="return confirm('Add ' + this.count.value + ' test players?')">
         <?= csrf_field() ?>

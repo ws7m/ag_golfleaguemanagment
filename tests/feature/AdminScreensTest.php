@@ -304,6 +304,29 @@ final class AdminScreensTest extends CIUnitTestCase
         $form->assertSee('Williams, Jordan');
     }
 
+    public function testGroupsAreListedFrontThenBackInTeeTimeOrder(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
+        $groups   = db_connect()->table('league_groups');
+        foreach ([
+            [1, 'back', '16:00', '16:30'],
+            [2, 'front', '16:20', '16:50'],
+            [3, 'front', '16:10', '16:40'],
+            [4, 'back', '16:00', '16:20'],
+            [5, 'front', null, null],
+            [6, 'front', '09:05', '09:35'],
+        ] as [$number, $nine, $front, $back]) {
+            $groups->insert(['league_id' => $leagueId, 'group_number' => $number, 'nine' => $nine, 'front_tee_time' => $front, 'back_tee_time' => $back, 'active' => 1]);
+        }
+
+        $html = $this->asAdmin()->get('admin/groups?league_id=' . $leagueId)->getBody();
+        preg_match_all('#<td><a [^>]*>(\d+)</a></td>|<tr>\s*<td>(\d+)</td>#', $html, $m);
+        $order = array_values(array_filter(array_map(static fn ($a, $b) => $a !== '' ? $a : $b, $m[1], $m[2])));
+
+        // Front: 09:05 (6), 16:10 (3), 16:20 (2), no time (5); then back: 16:20 (4), 16:30 (1).
+        $this->assertSame(['6', '3', '2', '5', '4', '1'], $order);
+    }
+
     public function testGroupTeeTimesAreSavedAndChecked(): void
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'League']);
@@ -703,7 +726,8 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->asAdmin()->post('admin/players/add-test', ['league_id' => $leagueId, 'count' => '3'])
             ->assertSessionHas('message', '3 test players added (Player3 to Player5). Each logs in with playerN / playerN.');
 
-        $this->seeInDatabase('players', ['last_name' => 'Player3', 'first_name' => '3', 'login' => 'player3', 'league_id' => $leagueId, 'is_player' => 1]);
+        $this->seeInDatabase('players', ['last_name' => 'Player3', 'first_name' => '3', 'login' => 'player3', 'league_id' => $leagueId, 'is_player' => 1,
+            'tee' => 'white', 'flight' => 2, 'handicap' => 10]);
         $this->seeInDatabase('players', ['last_name' => 'Player5', 'first_name' => '5', 'login' => 'player5']);
         $this->assertNotNull($players->verifyLogin('player4', 'player4'));
 

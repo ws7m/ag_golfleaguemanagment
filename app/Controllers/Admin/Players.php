@@ -208,7 +208,8 @@ class Players extends CrudController
      *
      * Adds a number of players named Player1 / 1, Player2 / 2, and so on,
      * continuing after the highest PlayerN already saved. Each gets the login
-     * and password playerN, and is registered in the chosen league.
+     * and password playerN, is registered in the chosen league, and plays
+     * from the white tees in flight 2 with a handicap of 10.
      */
     public function addTestPlayers()
     {
@@ -239,6 +240,9 @@ class Players extends CrudController
                 'login'         => "player{$n}",
                 'password_hash' => password_hash("player{$n}", PASSWORD_BCRYPT, ['cost' => 4]),
                 'league_id'     => $leagueId,
+                'tee'           => 'white',
+                'flight'        => 2,
+                'handicap'      => 10,
                 'is_player'     => 1,
                 'active'        => 1,
             ]);
