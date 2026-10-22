@@ -138,6 +138,7 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
   - Use for handicap
   - Total pot - Total of the entry fees marked paid on this round's score records; set when the round is scored
 - On the rounds list, the status is a dropdown; choosing a new status (e.g. Active) saves it straight away.
+- Setting a round to Active (from the list or its edit page) gives every active player registered in the league a score record for the round, unless they already have one: all 18 holes at 0, handicap used = the player's handicap, and the player's group and that group's nine if they are in a group. Existing score records are left alone.
 
 ### 2.8 Games
 - As admin, I want to be able to create/update/delete golf games to play on rounds
@@ -161,7 +162,7 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
   - Playing - Yes/No; the player has said they will play
   - Paid - Yes/No; set by admin when the entry fee is paid
   - Locked
-  - Hole1 to Hole18 - Strokes per hole; blank (NULL) until entered, never 0. Only the nine played is filled in.
+  - Hole1 to Hole18 - Strokes per hole; 0 (or blank) means not entered yet. Only the nine played is filled in.
   - Gross - Total strokes
   - Handicap used - The player's handicap applied in this round
   - Net - Gross minus handicap used

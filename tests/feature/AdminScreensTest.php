@@ -727,6 +727,69 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->seeInDatabase('league_groups', ['id' => $one, 'nine' => 'front']);
     }
 
+    public function testActivatingARoundAddsAScoreRecordForEachPlayer(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
+        $otherId  = (new LeagueModel())->insert(['name' => 'Other']);
+        $courseId = (new CourseModel())->insert(['name' => 'Course']);
+        $roundId  = (new RoundModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-05-03', 'name' => 'Round 1']);
+        $players  = new PlayerModel();
+        $ann      = (int) $players->insert(['first_name' => 'Ann', 'last_name' => 'Ames', 'league_id' => $leagueId, 'handicap' => 8]);
+        $bob      = (int) $players->insert(['first_name' => 'Bob', 'last_name' => 'Baker', 'league_id' => $leagueId, 'handicap' => 12]);
+        $cy       = (int) $players->insert(['first_name' => 'Cy', 'last_name' => 'Cole', 'league_id' => $leagueId, 'handicap' => 3]);
+        // Not added: inactive, another league's player, an admin-only account.
+        $players->insert(['first_name' => 'Gone', 'last_name' => 'Away', 'league_id' => $leagueId, 'active' => 0]);
+        $players->insert(['first_name' => 'Ed', 'last_name' => 'Else', 'league_id' => $otherId]);
+        $players->insert(['first_name' => 'Ad', 'last_name' => 'Min', 'league_id' => $leagueId, 'is_player' => 0]);
+        $db = db_connect();
+        $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 1, 'nine' => 'back', 'player1_id' => $ann, 'active' => 1]);
+        $groupId = $db->insertID();
+        // Cy already has a score for this round, which must be left alone.
+        $db->table('scores')->insert(['league_id' => $leagueId, 'round_id' => $roundId, 'player_id' => $cy, 'hole1' => 5, 'handicap_used' => 99]);
+
+        $this->asAdmin()->post("admin/rounds/{$roundId}/status", ['value' => 'active'])
+            ->assertSessionHas('message', '2027-05-03 Round 1 is now Active (live scoring open). 2 score records added for players. 1 players already had one and were left alone.');
+
+        $this->assertSame(3, $db->table('scores')->where('round_id', $roundId)->countAllResults());
+        $annScore = $db->table('scores')->where(['round_id' => $roundId, 'player_id' => $ann])->get()->getRowArray();
+        $this->assertSame(8, (int) $annScore['handicap_used']);
+        $this->assertSame($groupId, (int) $annScore['group_id']);
+        $this->assertSame('back', $annScore['nine']);
+        for ($i = 1; $i <= 18; $i++) {
+            $this->assertSame(0, (int) $annScore["hole{$i}"], "hole {$i}");
+        }
+        $this->seeInDatabase('scores', ['round_id' => $roundId, 'player_id' => $bob, 'handicap_used' => 12, 'group_id' => null, 'hole18' => 0, 'playing' => 1, 'paid' => 0]);
+        $this->seeInDatabase('scores', ['round_id' => $roundId, 'player_id' => $cy, 'hole1' => 5, 'handicap_used' => 99]);
+
+        // Activating again adds nothing.
+        $this->asAdmin()->post("admin/rounds/{$roundId}/status", ['value' => 'active'])
+            ->assertSessionHas('message', '2027-05-03 Round 1 is now Active (live scoring open). 0 score records added for players. 3 players already had one and were left alone.');
+        $this->assertSame(3, $db->table('scores')->where('round_id', $roundId)->countAllResults());
+
+        // A score created this way can be edited and saved: 0 means not entered yet.
+        $scoreId = (int) $annScore['id'];
+        $post    = ['round_id' => $roundId, 'player_id' => $ann, 'nine' => 'back', 'playing' => '1', 'handicap_used' => '8'];
+        for ($i = 1; $i <= 18; $i++) {
+            $post["hole{$i}"] = '0';
+        }
+        $post['hole10'] = '5';
+        $this->asAdmin()->post("admin/scores/{$scoreId}", $post)->assertRedirectTo('/admin/scores');
+        $this->seeInDatabase('scores', ['id' => $scoreId, 'hole10' => 5, 'gross' => null]);
+    }
+
+    public function testActivatingARoundFromItsEditPageAlsoAddsScores(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
+        $courseId = (new CourseModel())->insert(['name' => 'Course']);
+        $roundId  = (new RoundModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-05-03']);
+        (new PlayerModel())->insert(['first_name' => 'Ann', 'last_name' => 'Ames', 'league_id' => $leagueId, 'handicap' => 8]);
+
+        $this->asAdmin()->post("admin/rounds/{$roundId}", [
+            'league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-05-03', 'status' => 'active', 'entry_fee_cents' => '10.00',
+        ])->assertSessionHas('message', 'Round saved. 1 score records added for players.');
+        $this->assertSame(1, db_connect()->table('scores')->where('round_id', $roundId)->countAllResults());
+    }
+
     public function testRoundStatusCanBeChangedFromTheList(): void
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'League']);
@@ -738,7 +801,7 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->assertStringContainsString('<option value="scheduled" selected>Scheduled</option>', $html);
 
         $this->asAdmin()->post("admin/rounds/{$roundId}/status", ['value' => 'active'])
-            ->assertSessionHas('message', '2027-05-03 Round 1 is now Active (live scoring open).');
+            ->assertSessionHas('message', '2027-05-03 Round 1 is now Active (live scoring open). 0 score records added for players.');
         $this->seeInDatabase('rounds', ['id' => $roundId, 'status' => 'active']);
 
         $this->asAdmin()->post("admin/rounds/{$roundId}/status", ['value' => 'finished'])->assertSessionHas('error');

@@ -40,9 +40,10 @@ class ScoreModel extends Model
     {
         parent::__construct(...$params);
 
-        // A hole score, when entered, is 1 to 20 strokes. Blank means not entered yet.
+        // A hole score is 1 to 20 strokes. 0 or blank means not entered yet
+        // (activating a round creates score records with every hole at 0).
         for ($i = 1; $i <= 18; $i++) {
-            $this->validationRules["hole{$i}"] = 'permit_empty|integer|greater_than_equal_to[1]|less_than_equal_to[20]';
+            $this->validationRules["hole{$i}"] = 'permit_empty|integer|greater_than_equal_to[0]|less_than_equal_to[20]';
         }
     }
 
@@ -57,7 +58,8 @@ class ScoreModel extends Model
     }
 
     /**
-     * Total strokes for the nine played, or null if any hole is still blank.
+     * Total strokes for the nine played, or null if any hole of it is not
+     * entered yet (blank or 0).
      */
     public static function grossForNine(array $score): ?int
     {
@@ -67,7 +69,7 @@ class ScoreModel extends Model
 
         $total = 0;
         foreach (self::holesForNine($score['nine']) as $hole) {
-            if ($score["hole{$hole}"] === null || $score["hole{$hole}"] === '') {
+            if ((int) ($score["hole{$hole}"] ?? 0) <= 0) {
                 return null;
             }
             $total += (int) $score["hole{$hole}"];

@@ -172,7 +172,7 @@ abstract class CrudController extends BaseController
             if ($id !== false) {
                 $this->afterSave((int) $id, $data);
 
-                return redirect()->to($this->baseRoute)->with('message', "{$this->singular} added.");
+                return redirect()->to($this->baseRoute)->with('message', trim("{$this->singular} added. {$this->saveNote}"));
             }
         }
 
@@ -196,7 +196,7 @@ abstract class CrudController extends BaseController
             if ($model->update($id, ['id' => $id] + $this->columnsOnly($data))) {
                 $this->afterSave($id, $data);
 
-                return redirect()->to($this->baseRoute)->with('message', "{$this->singular} saved.");
+                return redirect()->to($this->baseRoute)->with('message', trim("{$this->singular} saved. {$this->saveNote}"));
             }
         }
 
@@ -226,6 +226,9 @@ abstract class CrudController extends BaseController
     {
         return null;
     }
+
+    /** Extra sentence added to the "added"/"saved" message; set it in afterSave(). */
+    protected string $saveNote = '';
 
     /**
      * Runs after a successful insert or update, with everything that was posted.

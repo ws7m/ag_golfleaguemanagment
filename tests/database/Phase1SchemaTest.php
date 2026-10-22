@@ -111,5 +111,9 @@ final class Phase1SchemaTest extends CIUnitTestCase
 
         $score['hole18'] = 4;
         $this->assertSame(44, ScoreModel::grossForNine($score));
+
+        // 0 means not entered yet.
+        $score['hole12'] = 0;
+        $this->assertNull(ScoreModel::grossForNine($score));
     }
 }
