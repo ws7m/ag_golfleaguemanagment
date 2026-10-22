@@ -727,37 +727,25 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->seeInDatabase('league_groups', ['id' => $one, 'nine' => 'front']);
     }
 
-    public function testAddAllGroupsToARound(): void
+    public function testRoundStatusCanBeChangedFromTheList(): void
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'League']);
         $courseId = (new CourseModel())->insert(['name' => 'Course']);
-        $roundId  = (new RoundModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-05-03']);
-        $players  = new PlayerModel();
-        $ann      = (int) $players->insert(['first_name' => 'Ann', 'last_name' => 'A']);
-        $bob      = (int) $players->insert(['first_name' => 'Bob', 'last_name' => 'B']);
-        $cy       = (int) $players->insert(['first_name' => 'Cy', 'last_name' => 'C']);
-        $gone     = (int) $players->insert(['first_name' => 'Di', 'last_name' => 'D', 'active' => 0]);
-        $db       = db_connect();
-        $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 1, 'nine' => 'front', 'player1_id' => $ann, 'player2_id' => $bob, 'active' => 1]);
-        $group1 = $db->insertID();
-        $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 2, 'nine' => 'back', 'player1_id' => $cy, 'player2_id' => $gone, 'active' => 1]);
-        $group2 = $db->insertID();
-        // Bob is already entered.
-        $db->table('scores')->insert(['league_id' => $leagueId, 'player_id' => $bob, 'round_id' => $roundId, 'playing' => 1]);
+        $roundId  = (new RoundModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-05-03', 'name' => 'Round 1']);
 
-        $this->asAdmin()->get("admin/rounds/{$roundId}/edit")->assertSee('Add all groups to this round');
+        $html = $this->asAdmin()->get("admin/rounds?league_id={$leagueId}")->getBody();
+        $this->assertMatchesRegularExpression("#action=\"[^\"]*admin/rounds/{$roundId}/status\"[^>]*>.*?<select name=\"value\"[^>]*onchange=\"this.form.submit\(\)\"#s", $html);
+        $this->assertStringContainsString('<option value="scheduled" selected>Scheduled</option>', $html);
 
-        $this->asAdmin()->post("admin/rounds/{$roundId}/add-groups")
-            ->assertSessionHas('message', '2 players from 2 groups added to this round. 1 were already in it.');
+        $this->asAdmin()->post("admin/rounds/{$roundId}/status", ['value' => 'active'])
+            ->assertSessionHas('message', '2027-05-03 Round 1 is now Active (live scoring open).');
+        $this->seeInDatabase('rounds', ['id' => $roundId, 'status' => 'active']);
 
-        $this->seeInDatabase('scores', ['round_id' => $roundId, 'player_id' => $ann, 'group_id' => $group1, 'nine' => 'front', 'playing' => 1, 'paid' => 0]);
-        $this->seeInDatabase('scores', ['round_id' => $roundId, 'player_id' => $cy, 'group_id' => $group2, 'nine' => 'back']);
-        $this->dontSeeInDatabase('scores', ['round_id' => $roundId, 'player_id' => $gone]);
-        $this->assertSame(3, $db->table('scores')->where('round_id', $roundId)->countAllResults());
+        $this->asAdmin()->post("admin/rounds/{$roundId}/status", ['value' => 'finished'])->assertSessionHas('error');
+        $this->seeInDatabase('rounds', ['id' => $roundId, 'status' => 'active']);
 
-        // Pressing it again adds nobody.
-        $this->asAdmin()->post("admin/rounds/{$roundId}/add-groups")
-            ->assertSessionHas('message', '0 players from 2 groups added to this round. 3 were already in it.');
+        // The round edit page no longer offers to add all groups.
+        $this->asAdmin()->get("admin/rounds/{$roundId}/edit")->assertDontSee('Add all groups');
     }
 
     public function testDeleteAllPlayersKeepsAdminsAndPlayersWithScores(): void

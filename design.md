@@ -137,7 +137,7 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
   - Entry fee - Default $10
   - Use for handicap
   - Total pot - Total of the entry fees marked paid on this round's score records; set when the round is scored
-- On a round's edit page, "Add all groups to this round" creates a score record for every active player in the league's active groups, with their group and the nine the group is playing. Players already in the round are skipped.
+- On the rounds list, the status is a dropdown; choosing a new status (e.g. Active) saves it straight away.
 
 ### 2.8 Games
 - As admin, I want to be able to create/update/delete golf games to play on rounds

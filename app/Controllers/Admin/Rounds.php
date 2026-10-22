@@ -2,10 +2,7 @@
 
 namespace App\Controllers\Admin;
 
-use App\Models\LeagueGroupModel;
 use App\Models\LeagueModel;
-use App\Models\PlayerModel;
-use App\Models\ScoreModel;
 use App\Models\RoundModel;
 use DateTimeImmutable;
 
@@ -20,7 +17,8 @@ class Rounds extends CrudController
     protected array $orderBy     = ['round_date' => 'ASC'];
     protected ?string $extraIndexView = 'admin/rounds/generate';
     protected array $headActions      = ['Generate rounds' => '#generate', 'Delete all rounds' => '#delete-rounds'];
-    protected ?string $extraFormView  = 'admin/rounds/add_groups';
+    // The status on the list is a dropdown that saves straight away.
+    protected array $selectColumns    = ['status' => 'admin/rounds/{id}/status'];
 
     // Safety limit on how many rounds one click can create.
     private const MAX_GENERATED = 52;
@@ -37,7 +35,7 @@ class Rounds extends CrudController
             'status'           => ['label' => 'Status', 'type' => 'select', 'default' => 'scheduled', 'required' => true, 'options' => [
                 'scheduled' => 'Scheduled', 'active' => 'Active (live scoring open)',
                 'closed'    => 'Closed (no new scores)', 'scored' => 'Scored (results done)',
-            ]],
+            ], 'listOptions' => ['scheduled' => 'Scheduled', 'active' => 'Active', 'closed' => 'Closed', 'scored' => 'Scored']],
             'entry_fee_cents'  => ['label' => 'Entry fee', 'type' => 'money', 'default' => 1000],
             'use_for_handicap' => ['label' => 'Use for handicap', 'type' => 'checkbox'],
             'total_pot_cents'  => ['label' => 'Total pot', 'type' => 'money', 'help' => 'Total of paid entry fees. Filled in when the round is scored.'],
@@ -51,64 +49,22 @@ class Rounds extends CrudController
     }
 
     /**
-     * Enters every player in the league's active groups into this round: each
-     * gets a score record (marked playing, not yet paid) with their group and
-     * the nine that group is playing. Players already in the round and
-     * inactive players are skipped.
+     * Sets a round's status from the dropdown on the rounds list.
      */
-    public function addGroups(int $id)
+    public function setStatus(int $id)
     {
-        $round = $this->findOr404($id);
-        $back  = redirect()->to("{$this->baseRoute}/{$id}/edit");
-
-        $groups = (new LeagueGroupModel())
-            ->where('league_id', $round['league_id'])
-            ->where('active', 1)
-            ->orderBy('group_number')
-            ->findAll();
-        if ($groups === []) {
-            return $back->with('error', 'This league has no active groups yet.');
+        $round  = $this->findOr404($id);
+        $status = (string) $this->request->getPost('value');
+        $back   = redirect()->to($this->baseRoute . '?league_id=' . $round['league_id']);
+        $labels = $this->fields()['status']['options'];
+        if (! isset($labels[$status])) {
+            return $back->with('error', 'Choose a status from the list.');
         }
 
-        $scores  = new ScoreModel();
-        $entered = array_map('intval', array_column($scores->where('round_id', $id)->findAll(), 'player_id'));
-        $active  = array_map('intval', array_column((new PlayerModel())->where('active', 1)->findAll(), 'id'));
-        $added   = 0;
-        $already = 0;
+        (new RoundModel())->update($id, ['status' => $status]);
+        $name = trim("{$round['round_date']} {$round['name']}");
 
-        $db = db_connect();
-        $db->transStart();
-        foreach ($groups as $group) {
-            foreach (LeagueGroupModel::playerIds($group) as $playerId) {
-                if (! in_array($playerId, $active, true)) {
-                    continue;
-                }
-                if (in_array($playerId, $entered, true)) {
-                    $already++;
-
-                    continue;
-                }
-                $scores->insert([
-                    'league_id' => $round['league_id'],
-                    'round_id'  => $id,
-                    'player_id' => $playerId,
-                    'group_id'  => $group['id'],
-                    'nine'      => $group['nine'] ?: 'front',
-                    'playing'   => 1,
-                    'paid'      => 0,
-                ]);
-                $entered[] = $playerId;
-                $added++;
-            }
-        }
-        $db->transComplete();
-
-        $message = "{$added} players from " . count($groups) . ' groups added to this round.';
-        if ($already > 0) {
-            $message .= " {$already} were already in it.";
-        }
-
-        return $back->with('message', $message);
+        return $back->with('message', "{$name} is now {$labels[$status]}.");
     }
 
     /**

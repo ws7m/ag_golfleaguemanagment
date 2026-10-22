@@ -53,6 +53,18 @@
                     <?php foreach ($columns as $name): ?>
                         <?php if ($name === $editLinkColumn): ?>
                             <td><a href="<?= site_url("{$baseRoute}/{$row['id']}/edit") ?>" title="Edit"><?= esc(field_display($fields[$name], $row[$name] ?? null)) ?: 'Edit' ?></a></td>
+                        <?php elseif (isset($selectColumns[$name])): ?>
+                            <td>
+                                <form method="post" action="<?= site_url(str_replace('{id}', (string) $row['id'], $selectColumns[$name])) ?>" class="row-form">
+                                    <?= csrf_field() ?>
+                                    <select name="value" class="row-select" aria-label="<?= esc($fields[$name]['label'], 'attr') ?>" onchange="this.form.submit()">
+                                        <?php foreach ($fields[$name]['options'] as $key => $label): ?>
+                                            <option value="<?= esc((string) $key, 'attr') ?>" <?= (string) $key === (string) ($row[$name] ?? '') ? 'selected' : '' ?>><?= esc($label) ?></option>
+                                        <?php endforeach ?>
+                                    </select>
+                                    <noscript><button type="submit">Save</button></noscript>
+                                </form>
+                            </td>
                         <?php elseif (isset($toggleColumns[$name])): ?>
                             <td>
                                 <form method="post" action="<?= site_url(str_replace('{id}', (string) $row['id'], $toggleColumns[$name])) ?>" class="row-form">

@@ -72,6 +72,15 @@ abstract class CrudController extends BaseController
      */
     protected array $toggleColumns = [];
 
+    /**
+     * List columns shown as a dropdown of the field's options that saves as
+     * soon as a choice is made (POST "value"): column => route with {id}.
+     * E.g. a round's status.
+     *
+     * @var array<string, string>
+     */
+    protected array $selectColumns = [];
+
     /** @var array<string, string> Extra buttons at the top of the list: label => link */
     protected array $headActions = [];
 
@@ -278,6 +287,7 @@ abstract class CrudController extends BaseController
             'filters'   => $this->filters,
             'actions'   => $this->rowActions(),
             'toggleColumns' => $this->toggleColumns,
+            'selectColumns' => $this->selectColumns,
             'editLinkColumn' => $this->editLinkColumn,
             'extraFormView'  => $this->extraFormView,
             'headActions' => $this->headActions,
