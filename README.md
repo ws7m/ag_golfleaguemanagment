@@ -7,6 +7,7 @@ See [design.md](design.md) for the design.
 - PHP 8.2 or newer (developed on PHP 8.5)
 - CodeIgniter 4.7
 - SQLite (the database is the file `writable/golfleague.db`, in WAL mode)
+- dompdf (tee time lists as PDF files)
 
 ## First-time setup on a Mac
 1. Install PHP and Composer:

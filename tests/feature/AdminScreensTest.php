@@ -327,7 +327,7 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->assertSame(['6', '3', '2', '5', '4', '1'], $order);
     }
 
-    public function testTeeTimeListShowsFrontThenBackInTimeOrderWithPlayers(): void
+    public function testTeeTimeListsForFrontAndBackWithDateOnOneLinePerTeeTime(): void
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'Monday League']);
         $players  = new PlayerModel();
@@ -342,16 +342,44 @@ final class AdminScreensTest extends CIUnitTestCase
 
         $this->asAdmin()->get("admin/groups?league_id={$leagueId}")->assertSee('admin/groups/tee-sheet');
 
-        $html = $this->asAdmin()->get("admin/groups/tee-sheet?league_id={$leagueId}")->getBody();
-        $text = trim((string) preg_replace(['/<[^>]+>/', '/\s+/'], ' ', substr($html, strpos($html, '<h2>Front</h2>'))));
-        $text = (string) preg_replace('/\s+/', ' ', $text);
+        $html = $this->asAdmin()->get("admin/groups/tee-sheet?league_id={$leagueId}&date=5/4/2027")->getBody();
+        $text = trim((string) preg_replace('/\s+/', ' ', preg_replace('/<[^>]+>/', ' ', $html)));
 
-        // Front: 16:00 then 16:10, with players as "Last, First"; then Back.
-        // Group 3's front time (15:00) isn't shown, as it plays the back
-        // nine; inactive group 4 isn't listed.
-        $this->assertStringStartsWith('Front Tee time Players 16:00 Cole, Cy 16:10 Ames, Ann Baker, Bob Back Tee time Players 16:02 No players', $text);
-        $this->assertStringNotContainsString('15:00', $html);
-        $this->assertStringNotContainsString('15:30', $html);
+        // One line per tee time, earliest first: time, then "First Last, First Last".
+        // Group 3 plays the back nine, so its front time (15:00) isn't shown;
+        // inactive group 4 isn't listed.
+        $this->assertStringContainsString('Tee time list - Front - 5/4/2027 16:00 Cy Cole 16:10 Ann Ames, Bob Baker', $text);
+        $this->assertStringContainsString('Tee time list - Back - 5/4/2027 16:02', $text);
+        $this->assertStringContainsString('TeeTimeList-Front-5-4-2027.pdf', $text);
+        $this->assertStringNotContainsString('15:00', $text);
+        $this->assertStringNotContainsString('15:30', $text);
+    }
+
+    public function testTeeTimeListDownloadsAsAPdfNamedForTheNineAndDate(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
+        $cy       = (new PlayerModel())->insert(['first_name' => 'Cy', 'last_name' => 'Cole', 'league_id' => $leagueId]);
+        db_connect()->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 1, 'nine' => 'back', 'back_tee_time' => '16:02', 'player1_id' => $cy, 'active' => 1]);
+
+        $result = $this->asAdmin()->get("admin/groups/tee-sheet/pdf?league_id={$leagueId}&nine=back&date=" . rawurlencode('May 4, 2027'));
+        $result->assertOK();
+        $result->assertHeader('Content-Type', 'application/pdf');
+        $result->assertHeader('Content-Disposition', 'attachment; filename="TeeTimeList-Back-May-4-2027.pdf"');
+        // response()->getBody(): the test response's own getBody() returns the
+        // body after an HTML parser has read it, which mangles a PDF.
+        $this->assertStringStartsWith('%PDF-', $result->response()->getBody());
+    }
+
+    public function testTeeTimeListFileNamesAreSafe(): void
+    {
+        $name = static fn (string $nine, string $date) => \App\Controllers\Admin\Groups::teeSheetFilename($nine, $date);
+
+        $this->assertSame('TeeTimeList-Front-5-4-2027.pdf', $name('front', '5/4/2027'));
+        $this->assertSame('TeeTimeList-Back-May-4-2027.pdf', $name('back', 'May 4, 2027'));
+        $this->assertSame('TeeTimeList-Front-etc-passwd.pdf', $name('front', '../../etc/passwd'));
+        $this->assertSame('TeeTimeList-Front-2027-05-04.pdf', $name('front', '2027-05-04'));
+        $this->assertSame('TeeTimeList-Back-undated.pdf', $name('back', '///'));
+        $this->assertSame('Tee time list - Back - 5/4/2027', \App\Controllers\Admin\Groups::teeSheetHeading('back', '5/4/2027'));
     }
 
     public function testGroupTeeTimesAreSavedAndChecked(): void

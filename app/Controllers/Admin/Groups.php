@@ -6,6 +6,7 @@ use App\Libraries\Lookup;
 use App\Models\LeagueGroupModel;
 use App\Models\LeagueModel;
 use App\Models\PlayerModel;
+use Dompdf\Dompdf;
 
 class Groups extends CrudController
 {
@@ -173,20 +174,99 @@ class Groups extends CrudController
     }
 
     /**
-     * A printable tee time list for a league: the groups playing the front
-     * nine, then those playing the back nine, each in tee time order, with
-     * each group's players (last name, first name). Groups without a tee
-     * time for their nine are listed last. Only active groups are included.
+     * The tee time list page: pick the league and the date to show, preview
+     * the front and back lists, and download each as a PDF.
      */
     public function teeSheet(): string
     {
-        $leagueId = (int) ($this->request->getGet('league_id') ?: Lookup::currentLeagueId());
-        $league   = (new LeagueModel())->find($leagueId);
+        [$leagueId, $league, $date] = $this->teeSheetRequest();
 
+        return view('admin/groups/tee_sheet', [
+            'title'    => 'Tee time list',
+            'league'   => $league,
+            'leagues'  => Lookup::leagues(),
+            'date'     => $date,
+            'sections' => [
+                'front' => $this->teeSheetRows($leagueId, 'front'),
+                'back'  => $this->teeSheetRows($leagueId, 'back'),
+            ],
+        ]);
+    }
+
+    /**
+     * Downloads the front or back tee time list as a PDF named
+     * TeeTimeList-<Front|Back>-<date>.pdf, for emailing.
+     */
+    public function teeSheetPdf()
+    {
+        [$leagueId, , $date] = $this->teeSheetRequest();
+        $nine = $this->request->getGet('nine') === 'back' ? 'back' : 'front';
+
+        $html = view('admin/groups/tee_sheet_pdf', [
+            'heading' => self::teeSheetHeading($nine, $date),
+            'rows'    => $this->teeSheetRows($leagueId, $nine),
+        ]);
+
+        $pdf = new Dompdf();
+        $pdf->loadHtml($html);
+        $pdf->setPaper('letter', 'portrait');
+        $pdf->render();
+
+        return $this->response
+            ->setHeader('Content-Type', 'application/pdf')
+            ->setHeader('Content-Disposition', 'attachment; filename="' . self::teeSheetFilename($nine, $date) . '"')
+            ->setBody($pdf->output());
+    }
+
+    /**
+     * "Tee time list - Front - 5/4/2027"
+     */
+    public static function teeSheetHeading(string $nine, string $date): string
+    {
+        return trim('Tee time list - ' . ucfirst($nine) . ($date !== '' ? " - {$date}" : ''));
+    }
+
+    /**
+     * "TeeTimeList-Front-5-4-2027.pdf". Anything in the date other than
+     * letters, numbers, - and _ becomes a dash, so "5/4/2027" or
+     * "May 4, 2027" are safe in a file name.
+     */
+    public static function teeSheetFilename(string $nine, string $date): string
+    {
+        $safe = trim((string) preg_replace('/[^A-Za-z0-9_-]+/', '-', $date), '-');
+
+        return 'TeeTimeList-' . ucfirst($nine) . '-' . ($safe !== '' ? $safe : 'undated') . '.pdf';
+    }
+
+    /**
+     * League id, league and the date to show, from the query string. The
+     * date is whatever the admin typed (today's date if blank), up to 40
+     * characters.
+     *
+     * @return array{0: int, 1: ?array, 2: string}
+     */
+    private function teeSheetRequest(): array
+    {
+        $leagueId = (int) ($this->request->getGet('league_id') ?: Lookup::currentLeagueId());
+        $date     = trim((string) $this->request->getGet('date'));
+
+        return [$leagueId, (new LeagueModel())->find($leagueId), mb_substr($date !== '' ? $date : date('n/j/Y'), 0, 40)];
+    }
+
+    /**
+     * The active groups playing one nine, in ascending tee time order (groups
+     * without a time last, then by group number), each with its players'
+     * names as "First Last".
+     *
+     * @return list<array{time: ?string, number: int, players: list<string>}>
+     */
+    private function teeSheetRows(int $leagueId, string $nine): array
+    {
         $groups = (new LeagueGroupModel())
             ->where('league_id', $leagueId)
             ->where('active', 1)
             ->findAll();
+        $groups = array_values(array_filter($groups, static fn ($g) => ($g['nine'] === 'back' ? 'back' : 'front') === $nine));
 
         $playerIds = [];
         foreach ($groups as $group) {
@@ -195,31 +275,21 @@ class Groups extends CrudController
         $names = [];
         if ($playerIds !== []) {
             foreach ((new PlayerModel())->whereIn('id', $playerIds)->findAll() as $player) {
-                $names[(int) $player['id']] = "{$player['last_name']}, {$player['first_name']}";
+                $names[(int) $player['id']] = "{$player['first_name']} {$player['last_name']}";
             }
         }
 
-        $sections = ['front' => [], 'back' => []];
+        $rows = [];
         foreach ($groups as $group) {
-            $nine = $group['nine'] === 'back' ? 'back' : 'front';
-            $sections[$nine][] = [
+            $rows[] = [
                 'time'    => $group["{$nine}_tee_time"],
                 'number'  => (int) $group['group_number'],
                 'players' => array_map(static fn ($id) => $names[$id] ?? '', LeagueGroupModel::playerIds($group)),
             ];
         }
-        foreach ($sections as &$rows) {
-            // Ascending tee time; groups without one last, then by group number.
-            usort($rows, static fn ($a, $b) => [$a['time'] === null, $a['time'], $a['number']] <=> [$b['time'] === null, $b['time'], $b['number']]);
-        }
-        unset($rows);
+        usort($rows, static fn ($a, $b) => [$a['time'] === null, $a['time'], $a['number']] <=> [$b['time'] === null, $b['time'], $b['number']]);
 
-        return view('admin/groups/tee_sheet', [
-            'title'    => 'Tee time list',
-            'league'   => $league,
-            'leagues'  => Lookup::leagues(),
-            'sections' => $sections,
-        ]);
+        return $rows;
     }
 
     /**
