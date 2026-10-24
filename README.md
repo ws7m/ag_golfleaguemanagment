@@ -63,6 +63,23 @@ you browsed to, as long as it is a local-network address (see
 `app/Config/App.php`), so nothing needs to be configured. Only do this on a
 network you trust: development mode shows detailed error pages.
 
+## Install on a Linux server
+`install.sh` downloads the software from GitHub and sets everything up on
+Debian, Ubuntu, Fedora or RHEL/Rocky/AlmaLinux 9+: PHP 8.2+ and its
+extensions, Composer, a web server (it uses nginx or Apache if one is already
+installed, otherwise installs nginx), the database, and the first admin
+account (it asks for the password). Copy the script to the server and run:
+```bash
+sudo bash install.sh
+```
+With a domain name pointing at the server, add free HTTPS:
+```bash
+sudo bash install.sh --domain golf.example.com --https you@example.com
+```
+Run it again to update to the newest version; the settings (`.env`) and the
+database are kept, and the database is backed up first. See
+`bash install.sh --help` for all options.
+
 ## Run the tests
 ```bash
 vendor/bin/phpunit
