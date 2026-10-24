@@ -359,7 +359,7 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->assertSame(['6', '3', '2', '5', '4', '1'], $order);
     }
 
-    public function testTeeTimeListsForFrontAndBackWithDateOnOneLinePerTeeTime(): void
+    public function testTeeTimeListsForFrontAndBackWithRoundDateOnOneLinePerTeeTime(): void
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'Monday League']);
         $players  = new PlayerModel();
@@ -373,11 +373,16 @@ final class AdminScreensTest extends CIUnitTestCase
         $groups->insert(['league_id' => $leagueId, 'group_number' => 3, 'nine' => 'back', 'front_tee_time' => '15:00', 'back_tee_time' => '16:02', 'active' => 1]);
         $groups->insert(['league_id' => $leagueId, 'group_number' => 4, 'nine' => 'front', 'front_tee_time' => '15:30', 'active' => 0]);
 
+        $courseId = (new CourseModel())->insert(['name' => 'Course']);
+        $roundId  = (new RoundModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-05-04', 'name' => 'Round 1']);
+        (new RoundModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-05-11', 'name' => 'Round 2']);
+
         $this->asAdmin()->get("admin/groups?league_id={$leagueId}")->assertSee('admin/groups/tee-sheet');
 
-        // The date picker sends YYYY-MM-DD; the lists show it as 5/4/2027.
-        $html = $this->asAdmin()->get("admin/groups/tee-sheet?league_id={$leagueId}&date=2027-05-04")->getBody();
-        $this->assertStringContainsString('type="date" id="sheet_date" name="date" value="2027-05-04"', $html);
+        // The round dropdown picks the date; the lists show it as 5/4/2027.
+        $html = $this->asAdmin()->get("admin/groups/tee-sheet?league_id={$leagueId}&round_id={$roundId}")->response()->getBody();
+        $this->assertStringContainsString("<option value=\"{$roundId}\" selected>5/4/2027 Round 1</option>", $html);
+        $this->assertStringContainsString('5/11/2027 Round 2</option>', $html);
         $text = trim((string) preg_replace('/\s+/', ' ', preg_replace('/<[^>]+>/', ' ', $html)));
 
         // One line per tee time, earliest first: time, then four places as
@@ -389,6 +394,25 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->assertStringContainsString('TeeTimeList-Front-5-4-2027.pdf', $text);
         $this->assertStringNotContainsString('15:00', $text);
         $this->assertStringNotContainsString('15:30', $text);
+
+        // Players not playing in the round are left off and their place is
+        // Open: Bob unticked Playing while the round was scheduled; Cy's score
+        // record says not playing; Ann's says playing.
+        $db = db_connect();
+        $db->table('round_playing')->insert(['round_id' => $roundId, 'player_id' => $bob, 'playing' => 0]);
+        $db->table('scores')->insertBatch([
+            ['league_id' => $leagueId, 'round_id' => $roundId, 'player_id' => $cy, 'playing' => 0],
+            ['league_id' => $leagueId, 'round_id' => $roundId, 'player_id' => $ann, 'playing' => 1],
+        ]);
+        $html = $this->asAdmin()->get("admin/groups/tee-sheet?league_id={$leagueId}&round_id={$roundId}")->response()->getBody();
+        $text = trim((string) preg_replace('/\s+/', ' ', preg_replace('/<[^>]+>/', ' ', $html)));
+        $this->assertStringContainsString('16:00 (4:00 PM) Open, Open, Open, Open 16:10 (4:10 PM) Ann Ames, Open, Open, Open', $text);
+        $this->assertStringNotContainsString('Bob Baker', $text);
+
+        // Another round still lists them.
+        $html = $this->asAdmin()->get("admin/groups/tee-sheet?league_id={$leagueId}&round_id=" . ($roundId + 1))->response()->getBody();
+        $this->assertStringContainsString('Bob Baker', $html);
+        $this->assertStringContainsString('Cy Cole', $html);
     }
 
     public function testTeeTimeListDownloadsAsAPdfNamedForTheNineAndDate(): void
@@ -396,8 +420,10 @@ final class AdminScreensTest extends CIUnitTestCase
         $leagueId = (new LeagueModel())->insert(['name' => 'League']);
         $cy       = (new PlayerModel())->insert(['first_name' => 'Cy', 'last_name' => 'Cole', 'league_id' => $leagueId]);
         db_connect()->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 1, 'nine' => 'back', 'back_tee_time' => '16:02', 'player1_id' => $cy, 'active' => 1]);
+        $courseId = (new CourseModel())->insert(['name' => 'Course']);
+        $roundId  = (new RoundModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-05-04']);
 
-        $result = $this->asAdmin()->get("admin/groups/tee-sheet/pdf?league_id={$leagueId}&nine=back&date=2027-05-04");
+        $result = $this->asAdmin()->get("admin/groups/tee-sheet/pdf?league_id={$leagueId}&nine=back&round_id={$roundId}");
         $result->assertOK();
         $result->assertHeader('Content-Type', 'application/pdf');
         $result->assertHeader('Content-Disposition', 'attachment; filename="TeeTimeList-Back-5-4-2027.pdf"');
@@ -427,10 +453,19 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->assertSame('TeeTimeList-Back-undated.pdf', $name('back', '///'));
         $this->assertSame('Monday League - Tee time list - Back - 5/4/2027', \App\Controllers\Admin\Groups::teeSheetHeading('Monday League', 'back', '5/4/2027'));
 
-        // A date that isn't a real calendar date falls back to today.
+        // Without a round (or with another league's) the next round from
+        // today is used, or the last round if none are left.
         $leagueId = (new LeagueModel())->insert(['name' => 'League']);
-        $html     = $this->asAdmin()->get("admin/groups/tee-sheet?league_id={$leagueId}&date=2027-02-30")->getBody();
-        $this->assertStringContainsString('value="' . date('Y-m-d') . '"', $html);
+        $this->asAdmin()->get("admin/groups/tee-sheet?league_id={$leagueId}")->assertSee('This league has no rounds yet.');
+        $courseId = (new CourseModel())->insert(['name' => 'Course']);
+        $rounds   = new RoundModel();
+        $past     = $rounds->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2000-05-01']);
+        $html     = $this->asAdmin()->get("admin/groups/tee-sheet?league_id={$leagueId}&round_id=999")->response()->getBody();
+        $this->assertStringContainsString("<option value=\"{$past}\" selected>", $html);
+        $next = $rounds->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2099-05-01']);
+        $rounds->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2099-05-08']);
+        $html = $this->asAdmin()->get("admin/groups/tee-sheet?league_id={$leagueId}")->response()->getBody();
+        $this->assertStringContainsString("<option value=\"{$next}\" selected>", $html);
     }
 
     public function testGroupTeeTimesAreSavedAndChecked(): void

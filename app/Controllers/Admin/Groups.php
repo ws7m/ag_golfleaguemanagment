@@ -3,9 +3,11 @@
 namespace App\Controllers\Admin;
 
 use App\Libraries\Lookup;
+use App\Libraries\RoundEntries;
 use App\Models\LeagueGroupModel;
 use App\Models\LeagueModel;
 use App\Models\PlayerModel;
+use App\Models\RoundModel;
 use DateTimeImmutable;
 use Dompdf\Dompdf;
 
@@ -175,22 +177,24 @@ class Groups extends CrudController
     }
 
     /**
-     * The tee time list page: pick the league and the date to show, preview
+     * The tee time list page: pick the league and the round to show, preview
      * the front and back lists, and download each as a PDF.
      */
     public function teeSheet(): string
     {
-        [$leagueId, $league, $isoDate, $date] = $this->teeSheetRequest();
+        [$leagueId, $league, $round, $date, $rounds] = $this->teeSheetRequest();
+        $notPlaying = $this->playersNotPlaying($round);
 
         return view('admin/groups/tee_sheet', [
             'title'    => 'Tee time list',
             'league'   => $league,
             'leagues'  => Lookup::leagues(),
-            'isoDate'  => $isoDate,
+            'round'    => $round,
+            'rounds'   => $rounds,
             'date'     => $date,
             'sections' => [
-                'front' => $this->teeSheetRows($leagueId, 'front'),
-                'back'  => $this->teeSheetRows($leagueId, 'back'),
+                'front' => $this->teeSheetRows($leagueId, 'front', $notPlaying),
+                'back'  => $this->teeSheetRows($leagueId, 'back', $notPlaying),
             ],
         ]);
     }
@@ -201,12 +205,12 @@ class Groups extends CrudController
      */
     public function teeSheetPdf()
     {
-        [$leagueId, $league, , $date] = $this->teeSheetRequest();
+        [$leagueId, $league, $round, $date] = $this->teeSheetRequest();
         $nine = $this->request->getGet('nine') === 'back' ? 'back' : 'front';
 
         $html = view('admin/groups/tee_sheet_pdf', [
             'heading' => self::teeSheetHeading($league['name'] ?? '', $nine, $date),
-            'rows'    => $this->teeSheetRows($leagueId, $nine),
+            'rows'    => $this->teeSheetRows($leagueId, $nine, $this->playersNotPlaying($round)),
         ]);
 
         $pdf = new Dompdf();
@@ -243,31 +247,77 @@ class Groups extends CrudController
     }
 
     /**
-     * League id, league and the date from the query string. The date comes
-     * from a date picker as YYYY-MM-DD (today if missing or not a real date)
-     * and is shown as month/day/year, e.g. 5/4/2027.
+     * League and round from the query string. Without a round (or with one
+     * from another league) the league's next round from today is used, or
+     * its last round if none are left. The round's date is shown as
+     * month/day/year, e.g. 5/4/2027; with no rounds there is no date.
      *
-     * @return array{0: int, 1: ?array, 2: string, 3: string} league id, league, YYYY-MM-DD, display date
+     * @return array{0: int, 1: ?array, 2: ?array, 3: string, 4: array<int, string>}
+     *         league id, league, round, display date, round choices (id => label)
      */
     private function teeSheetRequest(): array
     {
         $leagueId = (int) ($this->request->getGet('league_id') ?: Lookup::currentLeagueId());
-        $picked   = DateTimeImmutable::createFromFormat('!Y-m-d', (string) $this->request->getGet('date'));
-        $date     = $picked !== false && $picked->format('Y-m-d') === $this->request->getGet('date')
-            ? $picked
-            : new DateTimeImmutable('today');
+        $rounds   = (new RoundModel())->where('league_id', $leagueId)->orderBy('round_date')->orderBy('id')->findAll();
+        $byId     = array_column($rounds, null, 'id');
 
-        return [$leagueId, (new LeagueModel())->find($leagueId), $date->format('Y-m-d'), $date->format('n/j/Y')];
+        $round = $byId[(int) $this->request->getGet('round_id')] ?? null;
+        if ($round === null && $rounds !== []) {
+            $today = date('Y-m-d');
+            $next  = array_values(array_filter($rounds, static fn ($r) => $r['round_date'] >= $today));
+            $round = $next[0] ?? end($rounds);
+        }
+
+        $choices = [];
+        foreach ($rounds as $r) {
+            $choices[(int) $r['id']] = trim(self::displayDate($r['round_date']) . ' ' . ($r['name'] ?? ''));
+        }
+
+        return [$leagueId, (new LeagueModel())->find($leagueId), $round, $round ? self::displayDate($round['round_date']) : '', $choices];
+    }
+
+    /**
+     * "2027-05-04" as "5/4/2027".
+     */
+    private static function displayDate(string $isoDate): string
+    {
+        $date = DateTimeImmutable::createFromFormat('!Y-m-d', $isoDate);
+
+        return $date ? $date->format('n/j/Y') : $isoDate;
+    }
+
+    /**
+     * Ids of the players who said they are not playing in a round: their
+     * score record says not playing, or, without a score record, they
+     * unticked Playing while the round was scheduled.
+     *
+     * @return list<int>
+     */
+    private function playersNotPlaying(?array $round): array
+    {
+        if ($round === null) {
+            return [];
+        }
+        $db       = db_connect();
+        $roundId  = (int) $round['id'];
+        $scored   = $db->table('scores')->select('player_id, playing')->where('round_id', $roundId)->get()->getResultArray();
+        $playing  = array_map('intval', array_column($scored, 'playing', 'player_id'));
+        $playing += RoundEntries::playingChoices($roundId);
+
+        return array_keys(array_filter($playing, static fn ($p) => $p === 0));
     }
 
     /**
      * The active groups playing one nine, in ascending tee time order (groups
      * without a time last, then by group number), each with its first four
-     * player places as "First Last", or "Open" where no player is set.
+     * player places as "First Last", or "Open" where no player is set or
+     * the player is not playing in the round.
+     *
+     * @param list<int> $notPlaying Players shown as Open
      *
      * @return list<array{time: ?string, number: int, players: list<string>}>
      */
-    private function teeSheetRows(int $leagueId, string $nine): array
+    private function teeSheetRows(int $leagueId, string $nine, array $notPlaying = []): array
     {
         $groups = (new LeagueGroupModel())
             ->where('league_id', $leagueId)
@@ -291,7 +341,7 @@ class Groups extends CrudController
             $players = [];
             for ($i = 1; $i <= self::PLAYERS_PER_GROUP; $i++) {
                 $playerId  = (int) ($group["player{$i}_id"] ?? 0);
-                $players[] = $names[$playerId] ?? 'Open';
+                $players[] = in_array($playerId, $notPlaying, true) ? 'Open' : ($names[$playerId] ?? 'Open');
             }
             $rows[] = [
                 'time'    => $group["{$nine}_tee_time"],

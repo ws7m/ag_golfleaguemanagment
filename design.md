@@ -118,6 +118,7 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
   - Player6 Id - Normal member of the group
   - Active
 - The groups list shows only the tee time for the nine each group is playing now, and clicking Front/Back switches it.
+- Tee time list: separate Front and Back lists (and PDFs) for a round chosen from a dropdown (default: the next round from today). The round's date is in each heading and the PDF file name. Players who said they are not playing in that round are left off and their place shows as Open.
 - Admin can shift every group's front nine tee time, or every group's back nine tee time, earlier or later by a number of minutes (e.g. for daylight changes during the season). Two groups may have the same tee time.
 - Who actually played in a group in a given round, and which nine they played, is recorded on each player's score record for that round (Group Id and Front or back, see 2.9). This keeps a full history without changing the group each week.
 

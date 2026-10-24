@@ -12,18 +12,27 @@
             <option value="<?= esc((string) $key, 'attr') ?>" <?= $league && (int) $key === (int) $league['id'] ? 'selected' : '' ?>><?= esc($label) ?></option>
         <?php endforeach ?>
     </select>
-    <label for="sheet_date">Date</label>
-    <input type="date" id="sheet_date" name="date" value="<?= esc($isoDate, 'attr') ?>" required style="width: auto" onchange="this.form.submit()">
+    <label for="sheet_round">Round</label>
+    <?php if ($rounds === []): ?>
+        <span class="muted">This league has no rounds yet.</span>
+    <?php else: ?>
+        <select id="sheet_round" name="round_id" onchange="this.form.submit()">
+            <?php foreach ($rounds as $key => $label): ?>
+                <option value="<?= $key ?>" <?= $round && (int) $key === (int) $round['id'] ? 'selected' : '' ?>><?= esc($label) ?></option>
+            <?php endforeach ?>
+        </select>
+    <?php endif ?>
     <noscript><button type="submit">Update</button></noscript>
 </form>
-<p class="muted">The date is shown in each list's heading and used in the PDF file name.</p>
+<p class="muted">The round's date is shown in each list's heading and used in the PDF file name.
+    Players who said they are not playing in the round are left off, and their place shows as Open.</p>
 
 <div class="panel-pair">
 <?php foreach (['front' => 'Front', 'back' => 'Back'] as $nine => $label): ?>
     <section class="panel">
         <div class="page-head">
             <h2><?= $label ?></h2>
-            <a class="button" href="<?= site_url('admin/groups/tee-sheet/pdf?' . http_build_query(['league_id' => $league['id'] ?? '', 'nine' => $nine, 'date' => $isoDate])) ?>">
+            <a class="button" href="<?= site_url('admin/groups/tee-sheet/pdf?' . http_build_query(['league_id' => $league['id'] ?? '', 'nine' => $nine, 'round_id' => $round['id'] ?? ''])) ?>">
                 Download PDF</a>
         </div>
         <p class="muted"><?= esc(\App\Controllers\Admin\Groups::teeSheetFilename($nine, $date)) ?></p>
