@@ -554,6 +554,61 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->asAdmin()->get("admin/players?league_id={$leagueId}")->assertSee('<td class="num">$17.50</td>');
     }
 
+    public function testTeamNumbersOnScores(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
+        $courseId = (new CourseModel())->insert(['name' => 'Course']);
+        $roundId  = (new RoundModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-05-03', 'name' => 'Round 1']);
+        $db       = db_connect();
+        $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 2, 'active' => 1]);
+        $group2 = $db->insertID();
+        $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 5, 'active' => 1]);
+        $group5 = $db->insertID();
+
+        $ids = [];
+        foreach (['Ames' => $group2, 'Baker' => $group2, 'Cole' => $group5, 'Dunn' => null] as $last => $groupId) {
+            $playerId = (new PlayerModel())->insert(['first_name' => 'Pat', 'last_name' => $last, 'league_id' => $leagueId]);
+            $db->table('scores')->insert(['league_id' => $leagueId, 'round_id' => $roundId, 'player_id' => $playerId, 'group_id' => $groupId, 'nine' => 'front']);
+            $ids[$last] = $db->insertID();
+        }
+        $this->seeInDatabase('scores', ['id' => $ids['Ames'], 'team_number' => 0]);
+
+        // The list has a Team box for each score.
+        $this->assertStringContainsString("name=\"scores[{$ids['Ames']}][team_number]\"", $this->asAdmin()->get("admin/scores?round_id={$roundId}")->getBody());
+
+        // Teams = groups: Ames and Baker become team 2, Cole team 5 (a team of one,
+        // so a warning); Dunn has no group and is left at 0.
+        $this->asAdmin()->post('admin/scores/teams-from-groups', ['round_id' => $roundId])
+            ->assertSessionHas('message', '3 scores set to their group\'s number as their team. Check teams: Team 5 has 1 player.');
+        $this->seeInDatabase('scores', ['id' => $ids['Ames'], 'team_number' => 2]);
+        $this->seeInDatabase('scores', ['id' => $ids['Baker'], 'team_number' => 2]);
+        $this->seeInDatabase('scores', ['id' => $ids['Cole'], 'team_number' => 5]);
+        $this->seeInDatabase('scores', ['id' => $ids['Dunn'], 'team_number' => 0]);
+
+        // Changing teams from the list: Cole joins team 2 (now 3 players, no
+        // warning), Dunn's blank box stays 0; a bad number is refused.
+        $this->asAdmin()->post('admin/scores/save', ['scores' => [
+            $ids['Cole'] => ['team_number' => '2'],
+            $ids['Dunn'] => ['team_number' => ''],
+        ], 'return_round_id' => $roundId])->assertSessionHas('message', '2 scores saved.');
+        $this->seeInDatabase('scores', ['id' => $ids['Cole'], 'team_number' => 2]);
+        $this->seeInDatabase('scores', ['id' => $ids['Dunn'], 'team_number' => 0]);
+
+        $this->asAdmin()->post('admin/scores/save', ['scores' => [$ids['Dunn'] => ['team_number' => '100']]])->assertSessionHas('error');
+
+        // Team 2 with 5 players gets a warning.
+        foreach (['Eads', 'Ford'] as $last) {
+            $playerId = (new PlayerModel())->insert(['first_name' => 'Pat', 'last_name' => $last, 'league_id' => $leagueId]);
+            $db->table('scores')->insert(['league_id' => $leagueId, 'round_id' => $roundId, 'player_id' => $playerId, 'team_number' => 2]);
+        }
+        $this->asAdmin()->post('admin/scores/save', ['scores' => [$ids['Dunn'] => ['team_number' => '0']]])
+            ->assertSessionHas('message', '1 scores saved. Check teams: Team 2 has 5 players.');
+
+        // The list shows teams together, team 0 last.
+        $html = $this->asAdmin()->get("admin/scores?round_id={$roundId}")->getBody();
+        $this->assertLessThan(strpos($html, 'Dunn, Pat'), strpos($html, 'Cole, Pat'));
+    }
+
     public function testScoresListHasTogglesHoleBoxesAndPlainNames(): void
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'League']);
@@ -594,17 +649,17 @@ final class AdminScreensTest extends CIUnitTestCase
             $holes["hole{$h}"] = '5';
         }
         $holes['hole18'] = '';
-        $this->asAdmin()->post('admin/scores/holes', ['scores' => [$scoreId => $holes], 'return_round_id' => $roundId])
+        $this->asAdmin()->post('admin/scores/save', ['scores' => [$scoreId => $holes], 'return_round_id' => $roundId])
             ->assertSessionHas('message', '1 scores saved.');
         $this->seeInDatabase('scores', ['id' => $scoreId, 'hole10' => 5, 'hole18' => 0, 'gross' => null]);
 
         $holes['hole18'] = '4';
-        $this->asAdmin()->post('admin/scores/holes', ['scores' => [$scoreId => $holes], 'return_round_id' => $roundId]);
+        $this->asAdmin()->post('admin/scores/save', ['scores' => [$scoreId => $holes], 'return_round_id' => $roundId]);
         $this->seeInDatabase('scores', ['id' => $scoreId, 'hole18' => 4, 'gross' => 44, 'net' => 38, 'hole1' => 0]);
 
         // A bad value is refused for that score.
         $holes['hole12'] = '55';
-        $this->asAdmin()->post('admin/scores/holes', ['scores' => [$scoreId => $holes]])->assertSessionHas('error');
+        $this->asAdmin()->post('admin/scores/save', ['scores' => [$scoreId => $holes]])->assertSessionHas('error');
         $this->seeInDatabase('scores', ['id' => $scoreId, 'hole12' => 5]);
     }
 

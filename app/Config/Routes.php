@@ -44,7 +44,8 @@ $routes->group('admin', ['filter' => 'adminauth', 'namespace' => 'App\Controller
     $routes->post('players/add-test', 'Players::addTestPlayers'); // TEMPORARY test data helper
     $routes->post('players/delete-all', 'Players::deleteAll');
     $routes->post('scores/delete-all', 'Scores::deleteAll');
-    $routes->post('scores/holes', 'Scores::saveHoles');
+    $routes->post('scores/save', 'Scores::saveScores');
+    $routes->post('scores/teams-from-groups', 'Scores::teamsFromGroups');
     $routes->post('scores/(:num)/toggle/(:segment)', 'Scores::toggle/$1/$2');
     $routes->post('rounds/generate', 'Rounds::generate');
     $routes->post('rounds/delete-all', 'Rounds::deleteAll');

@@ -1,9 +1,24 @@
-<form method="post" action="<?= site_url('admin/scores/holes') ?>" id="hole-scores" class="actions">
+<form method="post" action="<?= site_url('admin/scores/save') ?>" id="hole-scores" class="actions">
     <?= csrf_field() ?>
     <input type="hidden" name="return_round_id" value="<?= esc((string) ($filterValues['round_id'] ?? ''), 'attr') ?>">
-    <button type="submit">Save hole scores</button>
-    <span class="muted">Type each player's strokes in the hole boxes above (the grey number is the hole), then save. Blank means not entered yet.</span>
+    <button type="submit">Save scores</button>
+    <span class="muted">Type team numbers and each player's strokes in the boxes above (the grey number is the hole), then save.
+        Players in a round with the same team number are a team; a blank team means an individual score. A blank hole means not entered yet.</span>
 </form>
+
+<?php if (! empty($filterValues['round_id'])): ?>
+    <section class="panel" id="teams-from-groups">
+        <h2>Teams = groups</h2>
+        <p class="muted">Sets every player's team number in this round to their group number, so teams start out as the groups
+            they tee off with. Players who aren't in a group are not changed. You can then change any player's team above.</p>
+        <form method="post" action="<?= site_url('admin/scores/teams-from-groups') ?>" class="form inline"
+              onsubmit="return confirm('Set every player\'s team in this round to their group number?')">
+            <?= csrf_field() ?>
+            <input type="hidden" name="round_id" value="<?= esc((string) $filterValues['round_id'], 'attr') ?>">
+            <button type="submit">Teams = groups</button>
+        </form>
+    </section>
+<?php endif ?>
 
 <?php
 $leagues = \App\Libraries\Lookup::leagues();

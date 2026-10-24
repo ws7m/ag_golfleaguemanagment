@@ -89,6 +89,16 @@ class Lookup
     }
 
     /**
+     * Short round labels for list pages: just the date.
+     */
+    public static function roundsShort(): array
+    {
+        $rows = db_connect()->table('rounds')->select('id, round_date')->get()->getResultArray();
+
+        return self::labels($rows, static fn ($r) => (string) $r['round_date']);
+    }
+
+    /**
      * Short group labels for list pages, without the league.
      */
     public static function groupsShort(): array

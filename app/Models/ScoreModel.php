@@ -17,7 +17,7 @@ class ScoreModel extends Model
         'league_id', 'player_id', 'group_id', 'round_id', 'nine', 'playing', 'paid', 'locked',
         'hole1', 'hole2', 'hole3', 'hole4', 'hole5', 'hole6', 'hole7', 'hole8', 'hole9',
         'hole10', 'hole11', 'hole12', 'hole13', 'hole14', 'hole15', 'hole16', 'hole17', 'hole18',
-        'gross', 'handicap_used', 'net', 'place', 'winnings_cents', 'image',
+        'gross', 'handicap_used', 'net', 'place', 'winnings_cents', 'image', 'team_number',
     ];
 
     protected $validationRules = [
@@ -34,6 +34,8 @@ class ScoreModel extends Model
         'net'            => 'permit_empty|integer',
         'place'          => 'permit_empty|is_natural_no_zero',
         'winnings_cents' => 'permit_empty|is_natural',
+        // Same round + same team number = a team; 0 = an individual score.
+        'team_number'    => 'permit_empty|integer|greater_than_equal_to[0]|less_than_equal_to[99]',
     ];
 
     public function __construct(...$params)
