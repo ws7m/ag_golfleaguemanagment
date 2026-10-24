@@ -114,6 +114,38 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->seeInDatabase('leagues', ['id' => $league['id'], 'name' => '2027 Summer League', 'active' => 0]);
     }
 
+    public function testLeagueNoticeShowsOnPlayerPage(): void
+    {
+        $id = (new LeagueModel())->insert(['name' => 'Notice League', 'start_date' => '2099-05-01', 'active' => 1]);
+
+        $list = $this->asAdmin()->get('admin/leagues');
+        $this->assertMatchesRegularExpression('#leagues/' . $id . '/notice">Notice</a>\s*<a href="[^"]*leagues/' . $id . '/edit">Edit#', $list->response()->getBody());
+        $this->asAdmin()->get("admin/leagues/{$id}/notice")->assertOK();
+
+        $this->asAdmin()->post("admin/leagues/{$id}/notice", ['notice' => "No play on July 4.\nBring <ball> markers."])
+            ->assertRedirectTo('/admin/leagues');
+        $this->seeInDatabase('leagues', ['id' => $id, 'notice' => "No play on July 4.\nBring <ball> markers."]);
+
+        // Editing the league on its main form leaves the notice alone.
+        $this->asAdmin()->post("admin/leagues/{$id}", ['name' => 'Notice League', 'start_date' => '2099-05-01', 'active' => '1']);
+        $this->seeInDatabase('leagues', ['id' => $id, 'notice' => "No play on July 4.\nBring <ball> markers."]);
+
+        // Players see it on their page after logging in, not on the login screen.
+        $this->withSession([])->get('login')->assertDontSee('League Notice');
+        $playerId = (new PlayerModel())->insert(['first_name' => 'Nora', 'last_name' => 'Notice', 'league_id' => $id]);
+        $page     = $this->withSession(['player_id' => $playerId])->get('player');
+        $page->assertOK();
+        $body = $page->response()->getBody();
+        $this->assertStringContainsString('<h2>League Notice</h2>', $body);
+        $this->assertStringContainsString('No play on July 4.<br />', $body);
+        $this->assertStringContainsString('Bring &lt;ball&gt; markers.', $body);
+
+        // A blank notice clears it.
+        $this->asAdmin()->post("admin/leagues/{$id}/notice", ['notice' => '  ']);
+        $this->seeInDatabase('leagues', ['id' => $id, 'notice' => null]);
+        $this->withSession(['player_id' => $playerId])->get('player')->assertDontSee('League Notice');
+    }
+
     public function testInvalidLeagueShowsErrorsAndSavesNothing(): void
     {
         $result = $this->asAdmin()->post('admin/leagues', ['name' => '', 'email' => 'not-an-email']);

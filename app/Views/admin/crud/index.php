@@ -36,7 +36,7 @@
 <?php if ($rows === []): ?>
     <p class="muted">No <?= esc(strtolower($title)) ?> yet.</p>
 <?php else: ?>
-    <?php $editColumn = $editLinkColumn === null || $actions !== []; ?>
+    <?php $editColumn = $editLinkColumn === null || $actions !== [] || $actionsBeforeEdit !== []; ?>
     <div class="table-wrap">
         <table>
             <thead>
@@ -81,6 +81,9 @@
                     <?php endforeach ?>
                     <?php if ($editColumn): ?>
                         <td class="row-actions">
+                            <?php foreach ($actionsBeforeEdit as $label => $route): ?>
+                                <a href="<?= site_url(str_replace('{id}', (string) $row['id'], $route)) ?>"><?= esc($label) ?></a>
+                            <?php endforeach ?>
                             <a href="<?= site_url("{$baseRoute}/{$row['id']}/edit") ?>">Edit</a>
                             <?php foreach ($actions as $label => $route): ?>
                                 <a href="<?= site_url(str_replace('{id}', (string) $row['id'], $route)) ?>"><?= esc($label) ?></a>

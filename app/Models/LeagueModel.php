@@ -10,7 +10,7 @@ class LeagueModel extends Model
     protected $primaryKey    = 'id';
     protected $returnType    = 'array';
     protected $useTimestamps = true;
-    protected $allowedFields = ['name', 'description', 'image', 'start_date', 'end_date', 'website', 'email', 'active'];
+    protected $allowedFields = ['name', 'description', 'image', 'start_date', 'end_date', 'website', 'email', 'active', 'notice'];
 
     protected $validationRules = [
         'name'       => 'required|max_length[100]',
@@ -18,5 +18,6 @@ class LeagueModel extends Model
         'end_date'   => 'permit_empty|valid_date[Y-m-d]',
         'email'      => 'permit_empty|valid_email',
         'active'     => 'permit_empty|in_list[0,1]',
+        'notice'     => 'permit_empty|max_length[2000]',
     ];
 }

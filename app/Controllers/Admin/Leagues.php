@@ -31,6 +31,11 @@ class Leagues extends CrudController
         ];
     }
 
+    protected function rowActionsBeforeEdit(): array
+    {
+        return ['Notice' => 'admin/leagues/{id}/notice'];
+    }
+
     protected function rowActions(): array
     {
         return ['Copy' => 'admin/leagues/{id}/copy'];
@@ -104,6 +109,37 @@ class Leagues extends CrudController
         }
 
         return $back->with('message', $message . ' Courses, holes and games were not changed.');
+    }
+
+    /**
+     * The league notice page: one text box for the message shown on the
+     * login screen. Kept off the main league form so it is quick to change.
+     */
+    public function notice(int $id): string
+    {
+        return view('admin/leagues/notice', [
+            'title'  => 'League Notice',
+            'league' => $this->findOr404($id),
+            'errors' => [],
+        ]);
+    }
+
+    public function saveNotice(int $id)
+    {
+        $league = $this->findOr404($id);
+        $notice = trim((string) $this->request->getPost('notice'));
+        $model  = $this->newModel();
+
+        if (! $model->update($id, ['id' => $id, 'name' => $league['name'], 'notice' => $notice === '' ? null : $notice])) {
+            return view('admin/leagues/notice', [
+                'title'  => 'League Notice',
+                'league' => ['notice' => $notice] + $league,
+                'errors' => $model->errors(),
+            ]);
+        }
+
+        return redirect()->to($this->baseRoute)
+            ->with('message', $notice === '' ? "Notice cleared for {$league['name']}." : "Notice saved for {$league['name']}.");
     }
 
     /**

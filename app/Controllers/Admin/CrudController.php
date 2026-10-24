@@ -297,6 +297,7 @@ abstract class CrudController extends BaseController
             'columns'   => $this->listColumns,
             'filters'   => $this->filters,
             'actions'   => $this->rowActions(),
+            'actionsBeforeEdit' => $this->rowActionsBeforeEdit(),
             'toggleColumns' => $this->toggleColumns,
             'selectColumns' => $this->selectColumns,
             'cellViews'     => $this->cellViews,
@@ -327,6 +328,16 @@ abstract class CrudController extends BaseController
      * @return array<string, string>
      */
     protected function rowActions(): array
+    {
+        return [];
+    }
+
+    /**
+     * Extra links on each list row shown before Edit: label => route with {id}.
+     *
+     * @return array<string, string>
+     */
+    protected function rowActionsBeforeEdit(): array
     {
         return [];
     }

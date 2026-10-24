@@ -38,6 +38,7 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
   - Website
   - Email
   - Active
+  - Notice - a message for players, set from the "Notice" link on the leagues list (multi-line text). The notice is shown under the heading "League Notice" on the player's page once they are logged in (their league's notice, or the current league's); blank shows nothing.
 
 ### 2.2 Courses
 - As admin, I want to be able to create/update/delete golf courses.
