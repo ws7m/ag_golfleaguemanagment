@@ -155,6 +155,7 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
   - game_votes - Round Id, Game Id, Count (one row per game voted for in a round; each vote adds 1)
   - game_voters - Round Id, Player Id, Game Id (who has voted in a round, so a player votes only once)
 - Admin rounds list: the Game column is a dropdown that saves as soon as a game is chosen, and a "Most votes" column shows the game players voted for most in each round with its count (ties show each game).
+- Score entry: when the league has an active round, the player's page shows an "Enter scores" button above the rounds list. It opens a page with the player's nine holes on one line (with par from their tees) and a Save button; gross and net show once all nine are entered. Saving marks the player as playing. Locked scores can't be changed.
 - Playing: the player's rounds list has a Playing box for scheduled and active rounds, ticked by default. For a scheduled round the choice is kept in round_playing (Round Id, Player Id, Playing) and used when the round is made active and score records are created. For an active round it sets Playing on the player's score record, adding the record if they don't have one. Closed and scored rounds show Yes/No only.
 
 ### 2.9 Scores

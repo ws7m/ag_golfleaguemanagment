@@ -15,6 +15,8 @@ $routes->group('player', ['filter' => 'playerauth', 'namespace' => 'App\Controll
     $routes->get('/', 'Home::index');
     $routes->post('rounds/(:num)/vote', 'Home::vote/$1');
     $routes->post('rounds/(:num)/playing', 'Home::playing/$1');
+    $routes->get('score', 'Home::score');
+    $routes->post('score', 'Home::saveScore');
 });
 
 // Admin screens.

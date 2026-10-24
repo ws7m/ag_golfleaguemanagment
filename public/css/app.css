@@ -154,6 +154,14 @@ tbody tr:last-child td { border-bottom: 0; }
 /* Hole score boxes on the scores list: two digits each. */
 .hole-cells { display: inline-flex; gap: 2px; }
 .hole-cell { width: 1.85rem; padding: 0.2rem 0; text-align: center; font-size: 0.9rem; }
+/* Player score entry: nine boxes on one line, narrow enough for a phone. */
+table.score-entry th, table.score-entry td { text-align: center; padding: 0.35rem 0.1rem; }
+table.score-entry .hole-cell { width: 1.75rem; font-size: 1rem; padding: 0.35rem 0; }
+@media (min-width: 600px) {
+    table.score-entry th, table.score-entry td { padding: 0.35rem 0.2rem; }
+    table.score-entry .hole-cell { width: 2.4rem; }
+}
+.score-totals { margin: 0.75rem 0 0; }
 .hole-cell::placeholder { color: var(--muted); opacity: 0.5; }
 /* A form button that looks like the links next to it. */
 .link-button { padding: 0; background: none; border: 0; color: var(--accent); font: inherit; font-weight: 400; text-decoration: underline; cursor: pointer; }

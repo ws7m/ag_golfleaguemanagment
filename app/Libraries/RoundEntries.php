@@ -81,6 +81,19 @@ class RoundEntries
     }
 
     /**
+     * A player's score record for a round. Without one, a new (unsaved)
+     * record set up as addPlayers() would, with playing ticked.
+     */
+    public static function scoreFor(array $round, array $player): array
+    {
+        $score = db_connect()->table('scores')
+            ->where(['round_id' => (int) $round['id'], 'player_id' => (int) $player['id']])
+            ->get()->getRowArray();
+
+        return $score ?? self::scoreRow($round, $player, self::groupsByPlayer((int) $round['league_id']), 1);
+    }
+
+    /**
      * Player id => playing (0/1) for the choices made while the round was
      * scheduled.
      *

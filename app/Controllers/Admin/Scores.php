@@ -131,8 +131,7 @@ class Scores extends CrudController
             if ($score === null || ! is_array($holes)) {
                 continue;
             }
-            $nine    = $score['nine'] ?: 'front';
-            $changes = ['nine' => $nine];
+            $team = null;
             if (array_key_exists('team_number', $holes)) {
                 $team = trim((string) $holes['team_number']);
                 if ($team !== '' && (! ctype_digit($team) || (int) $team > 99)) {
@@ -140,21 +139,16 @@ class Scores extends CrudController
 
                     continue;
                 }
+            }
+            [$changes, $error] = ScoreModel::holeChanges($score, $holes);
+            if ($error !== null) {
+                $errors[] = rtrim($error, '.') . " (score {$id}).";
+
+                continue;
+            }
+            if ($team !== null) {
                 $changes['team_number'] = (int) $team;
             }
-            foreach (ScoreModel::holesForNine($nine) as $hole) {
-                $value = trim((string) ($holes["hole{$hole}"] ?? ''));
-                if ($value !== '' && (! ctype_digit($value) || (int) $value > 20)) {
-                    $errors[] = "Hole {$hole} must be a number from 0 to 20 (score {$id}).";
-
-                    continue 2;
-                }
-                $changes["hole{$hole}"] = (int) $value;
-            }
-            $changes['gross'] = ScoreModel::grossForNine($changes + $score);
-            $changes['net']   = $changes['gross'] !== null && $score['handicap_used'] !== null
-                ? $changes['gross'] - (int) $score['handicap_used']
-                : null;
             $changes['updated_at'] = date('Y-m-d H:i:s');
             $db->table('scores')->where('id', (int) $id)->update($changes);
             $rounds[(int) $score['round_id']] = true;

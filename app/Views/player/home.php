@@ -3,6 +3,10 @@
 <h1>Hi, <?= esc($player['first_name']) ?></h1>
 <?= view('partials/league_notice', ['notice' => $notice]) ?>
 
+<?php if ($activeRound !== null): ?>
+    <p class="actions"><a class="button" href="<?= site_url('player/score') ?>">Enter scores for <?= esc(trim(date('n/j/Y', strtotime($activeRound['round_date'])) . ' ' . ($activeRound['name'] ?? ''))) ?></a></p>
+<?php endif ?>
+
 <h2>Rounds</h2>
 <?php if ($rounds === []): ?>
     <p class="muted">No rounds yet.</p>

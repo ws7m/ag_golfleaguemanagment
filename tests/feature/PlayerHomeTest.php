@@ -145,4 +145,57 @@ final class PlayerHomeTest extends CIUnitTestCase
         $this->seeInDatabase('scores', ['round_id' => $scheduled, 'player_id' => $this->playerId, 'playing' => 0]);
         $this->seeInDatabase('scores', ['round_id' => $scheduled, 'player_id' => $other, 'playing' => 1]);
     }
+
+    public function testScoreEntryForTheActiveRound(): void
+    {
+        $db = db_connect();
+        $db->table('players')->where('id', $this->playerId)->update(['handicap' => 6, 'tee' => 'blue']);
+        $db->table('courses')->insert(['name' => 'Home Course']);
+        $courseId = (int) $db->insertID();
+        for ($hole = 1; $hole <= 18; $hole++) {
+            $db->table('holes')->insert(['course_id' => $courseId, 'number' => $hole, 'nine' => $hole <= 9 ? 'front' : 'back', 'blue_par' => 4, 'white_par' => 3]);
+        }
+
+        // No active round: no link, and the page sends the player back.
+        $this->assertStringNotContainsString('player/score', $this->asPlayer()->get('player')->response()->getBody());
+        $this->asPlayer()->get('player/score')->assertRedirectTo('/player');
+
+        $db->table('rounds')->insert(['league_id' => $this->leagueId, 'course_id' => $courseId, 'round_date' => '2099-06-07', 'name' => 'Round 1', 'status' => 'active']);
+        $roundId = (int) $db->insertID();
+
+        $home = $this->asPlayer()->get('player')->response()->getBody();
+        $this->assertStringContainsString('Enter scores for 6/7/2099 Round 1', $home);
+        $this->assertLessThan(strpos($home, '<h2>Rounds</h2>'), strpos($home, 'player/score'));
+
+        // The page shows the nine holes on one line with the player's tee pars.
+        $page = $this->asPlayer()->get('player/score');
+        $page->assertOK();
+        $body = $page->response()->getBody();
+        $this->assertSame(9, substr_count($body, 'name="holes[hole'));
+        $this->assertStringContainsString('name="holes[hole9]"', $body);
+        $this->assertStringContainsString('Par 36', $body);
+
+        // Partly entered: saved without a total. No score record yet, so one is added.
+        $holes = ['hole1' => '5', 'hole2' => '4', 'hole3' => ''];
+        $this->asPlayer()->post('player/score', ['round_id' => $roundId, 'holes' => $holes])
+            ->assertSessionHas('message', 'Scores saved. Your total shows once all nine holes are entered.');
+        $this->seeInDatabase('scores', ['round_id' => $roundId, 'player_id' => $this->playerId, 'hole1' => 5, 'hole2' => 4, 'hole3' => 0, 'gross' => null, 'playing' => 1]);
+
+        // All nine: gross and net (gross less handicap).
+        $holes = array_combine(array_map(static fn ($h) => "hole{$h}", range(1, 9)), array_fill(0, 9, '5'));
+        $this->asPlayer()->post('player/score', ['round_id' => $roundId, 'holes' => $holes])
+            ->assertSessionHas('message', 'Scores saved. Gross 45, net 39.');
+        $this->assertSame(1, $db->table('scores')->where('round_id', $roundId)->countAllResults());
+
+        // A bad number saves nothing.
+        $this->asPlayer()->post('player/score', ['round_id' => $roundId, 'holes' => ['hole1' => '25'] + $holes])
+            ->assertSessionHas('error', 'Hole 1 must be a number from 0 to 20. Nothing was saved.');
+        $this->seeInDatabase('scores', ['round_id' => $roundId, 'hole1' => 5]);
+
+        // Locked scores can't be changed, and only the active round takes scores.
+        $db->table('scores')->where('round_id', $roundId)->update(['locked' => 1]);
+        $this->asPlayer()->post('player/score', ['round_id' => $roundId, 'holes' => ['hole1' => '3'] + $holes])->assertSessionHas('error');
+        $this->seeInDatabase('scores', ['round_id' => $roundId, 'hole1' => 5]);
+        $this->asPlayer()->post('player/score', ['round_id' => $roundId + 1, 'holes' => $holes])->assertRedirectTo('/player');
+    }
 }

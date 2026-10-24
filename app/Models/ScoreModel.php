@@ -60,6 +60,35 @@ class ScoreModel extends Model
     }
 
     /**
+     * Changes to save for hole scores posted for one score: the nine's
+     * holes (blank = 0, not entered), and the gross and net worked out from
+     * them. Returns an error message instead if a hole isn't 0 to 20.
+     *
+     * @param array $score  The score as stored
+     * @param array $posted holeN => value as typed
+     *
+     * @return array{0: array<string, mixed>, 1: ?string} [changes, error]
+     */
+    public static function holeChanges(array $score, array $posted): array
+    {
+        $nine    = $score['nine'] ?: 'front';
+        $changes = ['nine' => $nine];
+        foreach (self::holesForNine($nine) as $hole) {
+            $value = trim((string) ($posted["hole{$hole}"] ?? ''));
+            if ($value !== '' && (! ctype_digit($value) || (int) $value > 20)) {
+                return [[], "Hole {$hole} must be a number from 0 to 20."];
+            }
+            $changes["hole{$hole}"] = (int) $value;
+        }
+        $changes['gross'] = self::grossForNine($changes + $score);
+        $changes['net']   = $changes['gross'] !== null && $score['handicap_used'] !== null
+            ? $changes['gross'] - (int) $score['handicap_used']
+            : null;
+
+        return [$changes, null];
+    }
+
+    /**
      * Total strokes for the nine played, or null if any hole of it is not
      * entered yet (blank or 0).
      */

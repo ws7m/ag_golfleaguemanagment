@@ -7,6 +7,7 @@ use App\Libraries\Lookup;
 use App\Libraries\RoundEntries;
 use App\Models\LeagueModel;
 use App\Models\PlayerModel;
+use App\Models\ScoreModel;
 use CodeIgniter\Database\Exceptions\DatabaseException;
 
 /**
@@ -35,8 +36,11 @@ class Home extends BaseController
             ->orderBy('r.round_date')->orderBy('r.id')
             ->get()->getResultArray();
 
+        $active = $leagueId === null ? null : $this->activeRound($leagueId);
+
         return view('player/home', [
             'title'  => 'My page',
+            'activeRound' => $active,
             'player' => $player,
             'notice' => $leagueId ? (new LeagueModel())->find($leagueId)['notice'] ?? null : null,
             'rounds' => $rounds,
@@ -114,6 +118,82 @@ class Home extends BaseController
         $name = trim("{$round['round_date']} {$round['name']}");
 
         return $back->with('message', $playing ? "You are playing in {$name}." : "You are not playing in {$name}.");
+    }
+
+    /**
+     * Score entry for the league's active round: the player's nine holes on
+     * one line, saved together.
+     */
+    public function score()
+    {
+        $player = (new PlayerModel())->find(session('player_id'));
+        $round  = $this->activeRound((int) $this->leagueId($player));
+        if ($round === null) {
+            return redirect()->to('player')->with('error', 'There is no active round to enter scores for.');
+        }
+        $score = RoundEntries::scoreFor($round, $player);
+        $nine  = $score['nine'] ?: 'front';
+
+        // Par for each hole from the player's tees (white if not set).
+        $tee   = in_array($player['tee'] ?? '', ['blue', 'white', 'red'], true) ? $player['tee'] : 'white';
+        $holes = db_connect()->table('holes')->select("number, {$tee}_par AS par")
+            ->where('course_id', $round['course_id'])->get()->getResultArray();
+
+        return view('player/score', [
+            'title'  => 'Enter scores',
+            'round'  => $round,
+            'score'  => $score,
+            'nine'   => $nine,
+            'holes'  => ScoreModel::holesForNine($nine),
+            'pars'   => array_column($holes, 'par', 'number'),
+            'course' => db_connect()->table('courses')->where('id', $round['course_id'])->get()->getRowArray()['name'] ?? '',
+        ]);
+    }
+
+    public function saveScore()
+    {
+        $player = (new PlayerModel())->find(session('player_id'));
+        $back   = redirect()->to('player/score');
+        $round  = $this->activeRound((int) $this->leagueId($player));
+        if ($round === null || (int) $this->request->getPost('round_id') !== (int) $round['id']) {
+            return redirect()->to('player')->with('error', 'Scores can only be entered while the round is active.');
+        }
+
+        $score = RoundEntries::scoreFor($round, $player);
+        if (! empty($score['locked'])) {
+            return $back->with('error', 'Your score for this round is locked. Ask the league admin to change it.');
+        }
+        [$changes, $error] = ScoreModel::holeChanges($score, (array) ($this->request->getPost('holes') ?? []));
+        if ($error !== null) {
+            return $back->withInput()->with('error', $error . ' Nothing was saved.');
+        }
+
+        // Entering scores means the player is playing.
+        $changes['playing']    = 1;
+        $changes['updated_at'] = date('Y-m-d H:i:s');
+        $db = db_connect();
+        if (isset($score['id'])) {
+            $db->table('scores')->where('id', (int) $score['id'])->update($changes);
+        } else {
+            $db->table('scores')->insert($changes + $score);
+        }
+
+        $message = $changes['gross'] === null
+            ? 'Scores saved. Your total shows once all nine holes are entered.'
+            : "Scores saved. Gross {$changes['gross']}" . ($changes['net'] !== null ? ", net {$changes['net']}." : '.');
+
+        return $back->with('message', $message);
+    }
+
+    /**
+     * The league's active round: the latest by date if more than one.
+     */
+    private function activeRound(int $leagueId): ?array
+    {
+        return db_connect()->table('rounds')
+            ->where(['league_id' => $leagueId, 'status' => 'active'])
+            ->orderBy('round_date', 'DESC')->orderBy('id', 'DESC')
+            ->get()->getRowArray();
     }
 
     /**
