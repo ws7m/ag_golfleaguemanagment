@@ -936,6 +936,41 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->asAdmin()->get("admin/rounds/{$roundId}/edit")->assertDontSee('Add all groups');
     }
 
+    public function testRoundGameDropdownAndMostVotedGame(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
+        $courseId = (new CourseModel())->insert(['name' => 'Course']);
+        $roundId  = (new RoundModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-05-03', 'name' => 'Round 1']);
+        $db       = db_connect();
+        $games    = [];
+        foreach (['Best Ball', 'Skins', 'Scramble'] as $name) {
+            $db->table('games')->insert(['league_id' => $leagueId, 'name' => $name]);
+            $games[$name] = (int) $db->insertID();
+        }
+
+        $html = $this->asAdmin()->get("admin/rounds?league_id={$leagueId}")->response()->getBody();
+        $this->assertMatchesRegularExpression("#action=\"[^\"]*admin/rounds/{$roundId}/game\"[^>]*>.*?<select name=\"value\"[^>]*onchange=\"this.form.submit\(\)\"#s", $html);
+        $this->assertStringContainsString('<option value="" selected>—</option>', $html);
+        $this->assertStringContainsString('<th>Most votes</th>', $html);
+
+        $this->asAdmin()->post("admin/rounds/{$roundId}/game", ['value' => (string) $games['Skins']])
+            ->assertSessionHas('message', '2027-05-03 Round 1 game is now Skins.');
+        $this->seeInDatabase('rounds', ['id' => $roundId, 'game_id' => $games['Skins']]);
+        $this->asAdmin()->post("admin/rounds/{$roundId}/game", ['value' => '999'])->assertSessionHas('error');
+        $this->asAdmin()->post("admin/rounds/{$roundId}/game", ['value' => ''])
+            ->assertSessionHas('message', '2027-05-03 Round 1 has no game set.');
+        $this->seeInDatabase('rounds', ['id' => $roundId, 'game_id' => null]);
+
+        // The most voted game shows with its count; a tie shows both.
+        $db->table('game_votes')->insertBatch([
+            ['round_id' => $roundId, 'game_id' => $games['Skins'], 'count' => 3],
+            ['round_id' => $roundId, 'game_id' => $games['Best Ball'], 'count' => 1],
+        ]);
+        $this->assertStringContainsString('<td>Skins (3)</td>', $this->asAdmin()->get("admin/rounds?league_id={$leagueId}")->response()->getBody());
+        $db->table('game_votes')->insert(['round_id' => $roundId, 'game_id' => $games['Scramble'], 'count' => 3]);
+        $this->assertStringContainsString('<td>Scramble / Skins (3)</td>', $this->asAdmin()->get("admin/rounds?league_id={$leagueId}")->response()->getBody());
+    }
+
     public function testDeleteAllPlayersKeepsAdminsAndPlayersWithScores(): void
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'League']);

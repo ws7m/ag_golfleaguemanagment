@@ -2,6 +2,7 @@
 
 namespace App\Controllers\Admin;
 
+use App\Libraries\Lookup;
 use App\Libraries\RoundEntries;
 use App\Models\LeagueModel;
 use App\Models\RoundModel;
@@ -13,13 +14,13 @@ class Rounds extends CrudController
     protected string $title      = 'Rounds';
     protected string $singular   = 'Round';
     protected string $baseRoute  = 'admin/rounds';
-    protected array $listColumns = ['round_date', 'name', 'course_id', 'game_id', 'status', 'entry_fee_cents'];
+    protected array $listColumns = ['round_date', 'name', 'course_id', 'game_id', 'top_vote', 'status', 'entry_fee_cents'];
     protected array $filters     = ['league_id'];
     protected array $orderBy     = ['round_date' => 'ASC'];
     protected ?string $extraIndexView = 'admin/rounds/generate';
     protected array $headActions      = ['Generate rounds' => '#generate', 'Delete all rounds' => '#delete-rounds'];
-    // The status on the list is a dropdown that saves straight away.
-    protected array $selectColumns    = ['status' => 'admin/rounds/{id}/status'];
+    // The game and status on the list are dropdowns that save straight away.
+    protected array $selectColumns    = ['game_id' => 'admin/rounds/{id}/game', 'status' => 'admin/rounds/{id}/status'];
 
     // Safety limit on how many rounds one click can create.
     private const MAX_GENERATED = 52;
@@ -32,16 +33,70 @@ class Rounds extends CrudController
             'name'             => ['label' => 'Name'],
             'description'      => ['label' => 'Description', 'type' => 'textarea'],
             'course_id'        => ['label' => 'Course', 'type' => 'select', 'options' => 'courses', 'required' => true],
-            'game_id'          => ['label' => 'Game', 'type' => 'select', 'options' => 'games'],
+            'game_id'          => ['label' => 'Game', 'type' => 'select', 'options' => 'games', 'listOptions' => 'gamesShort'],
             'status'           => ['label' => 'Status', 'type' => 'select', 'default' => 'scheduled', 'required' => true, 'options' => [
                 'scheduled' => 'Scheduled', 'active' => 'Active (live scoring open)',
                 'closed'    => 'Closed (no new scores)', 'scored' => 'Scored (results done)',
             ], 'listOptions' => ['scheduled' => 'Scheduled', 'active' => 'Active', 'closed' => 'Closed', 'scored' => 'Scored']],
-            'entry_fee_cents'  => ['label' => 'Entry fee', 'type' => 'money', 'default' => 1000],
+            'entry_fee_cents'  => ['label' => 'Entry fee', 'listLabel' => 'Fee', 'type' => 'money', 'default' => 1000],
             'use_for_handicap' => ['label' => 'Use for handicap', 'type' => 'checkbox'],
             'total_pot_cents'  => ['label' => 'Total pot', 'type' => 'money', 'help' => 'Total of paid entry fees. Filled in when the round is scored.'],
             'image'            => ['label' => 'Image', 'help' => 'Picture uploads come later; for now a file name or link.'],
         ];
+    }
+
+    protected function listFields(): array
+    {
+        return ['top_vote' => ['label' => 'Most votes']];
+    }
+
+    /**
+     * Adds the game players voted for most in each round, with its count.
+     * A tie shows each of the tied games.
+     */
+    protected function listRows(array $rows, array $filterValues): array
+    {
+        $votes = db_connect()->table('game_votes v')
+            ->select('v.round_id, v.count, g.name')
+            ->join('games g', 'g.id = v.game_id')
+            ->whereIn('v.round_id', array_column($rows, 'id') ?: [0])
+            ->orderBy('v.count', 'DESC')->orderBy('g.name')
+            ->get()->getResultArray();
+
+        $top = [];
+        foreach ($votes as $vote) {
+            $best = $top[$vote['round_id']] ?? null;
+            if ($best === null) {
+                $top[$vote['round_id']] = ['names' => [$vote['name']], 'count' => (int) $vote['count']];
+            } elseif ((int) $vote['count'] === $best['count']) {
+                $top[$vote['round_id']]['names'][] = $vote['name'];
+            }
+        }
+        foreach ($rows as &$row) {
+            $best            = $top[$row['id']] ?? null;
+            $row['top_vote'] = $best === null ? '' : implode(' / ', $best['names']) . " ({$best['count']})";
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Sets a round's game from the dropdown on the rounds list.
+     */
+    public function setGame(int $id)
+    {
+        $round  = $this->findOr404($id);
+        $value  = (string) $this->request->getPost('value');
+        $back   = redirect()->to($this->baseRoute . '?league_id=' . $round['league_id']);
+        $games  = Lookup::gamesShort();
+        if (! isset($games[$value])) {
+            return $back->with('error', 'Choose a game from the list.');
+        }
+
+        (new RoundModel())->update($id, ['game_id' => $value === '' ? null : (int) $value]);
+        $name = trim("{$round['round_date']} {$round['name']}");
+
+        return $back->with('message', $value === '' ? "{$name} has no game set." : "{$name} game is now {$games[$value]}.");
     }
 
     protected function rowActions(): array

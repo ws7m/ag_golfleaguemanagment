@@ -77,6 +77,22 @@ class Lookup
         return self::labels($rows, static fn ($r) => "{$r['name']} ({$r['league']})");
     }
 
+    /**
+     * Games for the dropdown on the rounds list: '' (no game) first, then
+     * games by name. The league is added only when there is more than one.
+     */
+    public static function gamesShort(): array
+    {
+        $rows = db_connect()->table('games g')
+            ->select('g.id, g.name, g.active, l.name AS league')
+            ->join('leagues l', 'l.id = g.league_id')
+            ->orderBy('l.start_date', 'DESC')->orderBy('g.name')
+            ->get()->getResultArray();
+        $oneLeague = count(array_unique(array_column($rows, 'league'))) <= 1;
+
+        return ['' => '—'] + self::labels($rows, static fn ($r) => $oneLeague ? $r['name'] : "{$r['name']} ({$r['league']})");
+    }
+
     public static function groups(): array
     {
         $rows = db_connect()->table('league_groups g')

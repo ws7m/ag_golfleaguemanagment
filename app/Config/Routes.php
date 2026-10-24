@@ -54,6 +54,7 @@ $routes->group('admin', ['filter' => 'adminauth', 'namespace' => 'App\Controller
     $routes->post('rounds/generate', 'Rounds::generate');
     $routes->post('rounds/delete-all', 'Rounds::deleteAll');
     $routes->post('rounds/(:num)/status', 'Rounds::setStatus/$1');
+    $routes->post('rounds/(:num)/game', 'Rounds::setGame/$1');
     $routes->get('courses/(:num)/holes', 'Holes::edit/$1');
     $routes->post('courses/(:num)/holes', 'Holes::update/$1');
     $routes->get('courses/(:num)/export', 'Courses::export/$1');
