@@ -98,4 +98,51 @@ final class PlayerHomeTest extends CIUnitTestCase
         $this->seeInDatabase('game_votes', ['round_id' => $scheduled, 'game_id' => $games['Best Ball'], 'count' => 2]);
         $this->assertSame(1, $db->table('game_votes')->where('round_id', $scheduled)->countAllResults());
     }
+
+    public function testPlayingBoxForScheduledAndActiveRounds(): void
+    {
+        $db = db_connect();
+        $db->table('players')->where('id', $this->playerId)->update(['handicap' => 7]);
+        $db->table('courses')->insert(['name' => 'Home Course']);
+        $courseId = (int) $db->insertID();
+        $leagueId = $this->leagueId;
+        $round    = static function (string $date, string $status) use ($db, $courseId, $leagueId): int {
+            $db->table('rounds')->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => $date, 'status' => $status]);
+
+            return (int) $db->insertID();
+        };
+        $scheduled = $round('2099-06-14', 'scheduled');
+        $active    = $round('2099-06-07', 'active');
+        $scored    = $round('2099-05-31', 'scored');
+
+        // Playing is ticked by default, and offered for scheduled and active rounds only.
+        $body = $this->asPlayer()->get('player')->response()->getBody();
+        $this->assertSame(2, substr_count($body, 'type="checkbox" name="playing" value="1" checked'));
+        $this->assertStringContainsString("player/rounds/{$scheduled}/playing", $body);
+        $this->assertStringContainsString("player/rounds/{$active}/playing", $body);
+        $this->assertStringNotContainsString("player/rounds/{$scored}/playing", $body);
+        $this->asPlayer()->post("player/rounds/{$scored}/playing", ['playing' => '0'])->assertSessionHas('error');
+
+        // Scheduled: the choice is kept for when the round is made active.
+        $this->asPlayer()->post("player/rounds/{$scheduled}/playing", ['playing' => '0'])
+            ->assertSessionHas('message', 'You are not playing in 2099-06-14.');
+        $this->seeInDatabase('round_playing', ['round_id' => $scheduled, 'player_id' => $this->playerId, 'playing' => 0]);
+        $this->dontSeeInDatabase('scores', ['round_id' => $scheduled]);
+        $body = $this->asPlayer()->get('player')->response()->getBody();
+        $this->assertSame(1, substr_count($body, 'value="1" checked'));
+
+        // Active: unticking adds a score record marked not playing; ticking sets it playing.
+        $this->asPlayer()->post("player/rounds/{$active}/playing", ['playing' => '0']);
+        $this->seeInDatabase('scores', ['round_id' => $active, 'player_id' => $this->playerId, 'playing' => 0, 'handicap_used' => 7, 'hole1' => 0]);
+        $this->asPlayer()->post("player/rounds/{$active}/playing", ['playing' => '1'])
+            ->assertSessionHas('message', 'You are playing in 2099-06-07.');
+        $this->seeInDatabase('scores', ['round_id' => $active, 'player_id' => $this->playerId, 'playing' => 1]);
+        $this->assertSame(1, $db->table('scores')->where('round_id', $active)->countAllResults());
+
+        // Making the scheduled round active uses the player's choice.
+        $other = (int) (new PlayerModel())->insert(['first_name' => 'Otto', 'last_name' => 'Play', 'league_id' => $this->leagueId]);
+        \App\Libraries\RoundEntries::addPlayers($db->table('rounds')->where('id', $scheduled)->get()->getRowArray());
+        $this->seeInDatabase('scores', ['round_id' => $scheduled, 'player_id' => $this->playerId, 'playing' => 0]);
+        $this->seeInDatabase('scores', ['round_id' => $scheduled, 'player_id' => $other, 'playing' => 1]);
+    }
 }

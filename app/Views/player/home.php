@@ -7,11 +7,12 @@
 <?php if ($rounds === []): ?>
     <p class="muted">No rounds yet.</p>
 <?php else: ?>
-    <p class="muted">For a scheduled round, choose the game you'd like to play and select Vote. You get one vote per round.</p>
+    <p class="muted">For a scheduled round, choose the game you'd like to play and select Vote. You get one vote per round.
+        Untick Playing for a scheduled or active round you can't make.</p>
     <div class="table-wrap">
         <table>
             <thead>
-            <tr><th>Date</th><th>Name</th><th>Course</th><th>Game</th><th>Your vote</th><th>Status</th></tr>
+            <tr><th>Date</th><th>Name</th><th>Course</th><th>Game</th><th>Your vote</th><th>Status</th><th>Playing</th></tr>
             </thead>
             <tbody>
             <?php foreach ($rounds as $round): ?>
@@ -40,6 +41,26 @@
                         <?php endif ?>
                     </td>
                     <td><?= esc($statuses[$round['status']] ?? $round['status']) ?></td>
+                    <?php
+                    // A score record says it once the round is active; before that, the
+                    // player's own choice. Playing unless they said otherwise.
+                    $playing = $round['score_playing'] ?? ($round['status'] === 'scheduled' ? $round['chosen_playing'] : null) ?? 1;
+                    ?>
+                    <td>
+                        <?php if (in_array($round['status'], ['scheduled', 'active'], true)): ?>
+                            <form method="post" action="<?= site_url("player/rounds/{$round['id']}/playing") ?>" class="row-form">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="playing" value="0">
+                                <input type="checkbox" name="playing" value="1" <?= $playing ? 'checked' : '' ?>
+                                       aria-label="Playing on <?= esc($round['round_date'], 'attr') ?>" onchange="this.form.submit()">
+                                <noscript><button type="submit" class="link-button">Save</button></noscript>
+                            </form>
+                        <?php elseif ($round['score_playing'] !== null): ?>
+                            <?= $round['score_playing'] ? 'Yes' : 'No' ?>
+                        <?php else: ?>
+                            <span class="muted">—</span>
+                        <?php endif ?>
+                    </td>
                 </tr>
             <?php endforeach ?>
             </tbody>

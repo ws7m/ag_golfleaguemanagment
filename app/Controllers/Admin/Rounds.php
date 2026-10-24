@@ -2,7 +2,7 @@
 
 namespace App\Controllers\Admin;
 
-use App\Models\LeagueGroupModel;
+use App\Libraries\RoundEntries;
 use App\Models\LeagueModel;
 use App\Models\RoundModel;
 use DateTimeImmutable;
@@ -85,69 +85,14 @@ class Rounds extends CrudController
     }
 
     /**
-     * Gives every active player registered in the round's league a score
-     * record for the round, unless they already have one. New records have
-     * all 18 hole scores set to 0 (not entered yet), the handicap used set to
-     * the player's handicap, and the player's group and the nine that group
-     * is playing, if they are in one. Existing records are left alone.
+     * Gives the league's players score records for the round (see
+     * RoundEntries::addPlayers()).
      *
      * @return string A sentence saying how many were added
      */
     private function addPlayersToRound(array $round): string
     {
-        $roundId = (int) $round['id'];
-        $db      = db_connect();
-
-        $players = $db->table('players')
-            ->where('league_id', $round['league_id'])
-            ->where('is_player', 1)
-            ->where('active', 1)
-            ->get()->getResultArray();
-        $already = array_map('intval', array_column(
-            $db->table('scores')->select('player_id')->where('round_id', $roundId)->get()->getResultArray(),
-            'player_id'
-        ));
-
-        // Each player's group in this league (active groups only).
-        $groupOf = [];
-        $groups  = $db->table('league_groups')->where('league_id', $round['league_id'])->where('active', 1)->get()->getResultArray();
-        foreach ($groups as $group) {
-            foreach (LeagueGroupModel::playerIds($group) as $playerId) {
-                $groupOf[$playerId] ??= $group;
-            }
-        }
-
-        $now   = date('Y-m-d H:i:s');
-        $added = 0;
-        $db->transStart();
-        foreach ($players as $player) {
-            $playerId = (int) $player['id'];
-            if (in_array($playerId, $already, true)) {
-                continue;
-            }
-            $group = $groupOf[$playerId] ?? null;
-            $row   = [
-                'league_id'     => $round['league_id'],
-                'round_id'      => $roundId,
-                'player_id'     => $playerId,
-                'group_id'      => $group['id'] ?? null,
-                'nine'          => $group === null ? null : ($group['nine'] === 'back' ? 'back' : 'front'),
-                'playing'       => 1,
-                'paid'          => 0,
-                'locked'        => 0,
-                'handicap_used' => $player['handicap'],
-                'created_at'    => $now,
-                'updated_at'    => $now,
-            ];
-            for ($i = 1; $i <= 18; $i++) {
-                $row["hole{$i}"] = 0;
-            }
-            $db->table('scores')->insert($row);
-            $added++;
-        }
-        $db->transComplete();
-
-        $kept = count(array_intersect($already, array_map(static fn ($p) => (int) $p['id'], $players)));
+        [$added, $kept] = RoundEntries::addPlayers($round);
 
         return "{$added} score records added for players." . ($kept > 0 ? " {$kept} players already had one and were left alone." : '');
     }

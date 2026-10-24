@@ -4,13 +4,15 @@ namespace App\Controllers\Player;
 
 use App\Controllers\BaseController;
 use App\Libraries\Lookup;
+use App\Libraries\RoundEntries;
 use App\Models\LeagueModel;
 use App\Models\PlayerModel;
 use CodeIgniter\Database\Exceptions\DatabaseException;
 
 /**
  * Player home page: the league notice, and the league's rounds with a vote
- * for the game each scheduled round should use.
+ * for the game each scheduled round should use and whether the player is
+ * playing.
  */
 class Home extends BaseController
 {
@@ -21,11 +23,14 @@ class Home extends BaseController
         $db       = db_connect();
 
         $rounds = $leagueId === null ? [] : $db->table('rounds r')
-            ->select('r.id, r.round_date, r.name, r.status, c.name AS course, g.name AS game, v.game_id AS voted_game_id, vg.name AS voted_game')
+            ->select('r.id, r.round_date, r.name, r.status, c.name AS course, g.name AS game, v.game_id AS voted_game_id, vg.name AS voted_game,
+                s.playing AS score_playing, rp.playing AS chosen_playing')
             ->join('courses c', 'c.id = r.course_id', 'left')
             ->join('games g', 'g.id = r.game_id', 'left')
             ->join('game_voters v', 'v.round_id = r.id AND v.player_id = ' . (int) $player['id'], 'left')
             ->join('games vg', 'vg.id = v.game_id', 'left')
+            ->join('scores s', 's.round_id = r.id AND s.player_id = ' . (int) $player['id'], 'left')
+            ->join('round_playing rp', 'rp.round_id = r.id AND rp.player_id = ' . (int) $player['id'], 'left')
             ->where('r.league_id', $leagueId)
             ->orderBy('r.round_date')->orderBy('r.id')
             ->get()->getResultArray();
@@ -89,6 +94,26 @@ class Home extends BaseController
         $name = trim("{$round['round_date']} {$round['name']}");
 
         return $back->with('message', "Thanks! Your vote for {$games[$gameId]} in {$name} is saved.");
+    }
+
+    /**
+     * Saves the Playing box for a scheduled or active round (see
+     * RoundEntries::setPlaying()).
+     */
+    public function playing(int $roundId)
+    {
+        $player = (new PlayerModel())->find(session('player_id'));
+        $back   = redirect()->to('player');
+        $round  = db_connect()->table('rounds')->where('id', $roundId)->where('league_id', $this->leagueId($player))->get()->getRowArray();
+        if ($round === null || ! in_array($round['status'], ['scheduled', 'active'], true)) {
+            return $back->with('error', 'Playing can only be changed for scheduled or active rounds.');
+        }
+
+        $playing = (bool) $this->request->getPost('playing');
+        RoundEntries::setPlaying($round, $player, $playing);
+        $name = trim("{$round['round_date']} {$round['name']}");
+
+        return $back->with('message', $playing ? "You are playing in {$name}." : "You are not playing in {$name}.");
     }
 
     /**
