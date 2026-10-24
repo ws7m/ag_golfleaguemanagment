@@ -1,5 +1,6 @@
 <?php
 
+use App\Libraries\CourseCsv;
 use App\Models\CourseModel;
 use App\Models\HoleModel;
 use App\Models\LeagueModel;
@@ -216,6 +217,40 @@ final class AdminScreensTest extends CIUnitTestCase
 
         // The import form is on the course's edit page.
         $this->asAdmin()->get("admin/courses/{$courseId}/edit")->assertSee("admin/courses/{$courseId}/import");
+    }
+
+    public function testImportCourseFromCsv(): void
+    {
+        $this->asAdmin()->get('admin/courses')->assertSee('admin/courses/import');
+
+        // An exported course comes back as a new course with its holes.
+        $courseId = (new CourseModel())->insert(['name' => 'Home Course', 'city' => 'Fort Collins', 'front_slope' => 113, 'active' => 1]);
+        for ($n = 1; $n <= 18; $n++) {
+            (new HoleModel())->insert(['course_id' => $courseId, 'number' => $n, 'nine' => $n <= 9 ? 'front' : 'back', 'white_par' => 4, 'white_yardage' => 300 + $n, 'handicap' => $n]);
+        }
+        $csv = CourseCsv::export((new CourseModel())->find($courseId), (new HoleModel())->where('course_id', $courseId)->findAll());
+
+        // The same name is refused, and nothing is added.
+        $result = CourseCsv::import($csv);
+        $this->assertSame(['A course named "Home Course" already exists. To update it, use Import on that course\'s edit page.'], $result['errors']);
+        $this->assertSame(1, (new CourseModel())->countAllResults());
+
+        $result = CourseCsv::import(str_replace('name,"Home Course"', 'name,"Away Course"', $csv));
+        $this->assertSame([], $result['errors']);
+        $this->assertSame(18, $result['holes']);
+        $this->seeInDatabase('courses', ['id' => $result['id'], 'name' => 'Away Course', 'city' => 'Fort Collins', 'front_slope' => 113, 'active' => 1]);
+        $this->seeInDatabase('holes', ['course_id' => $result['id'], 'number' => 18, 'nine' => 'back', 'white_par' => 4, 'white_yardage' => 318, 'handicap' => 18]);
+        $this->assertSame(18, (new HoleModel())->where('course_id', $result['id'])->countAllResults());
+
+        // No name, or a bad hole, adds nothing.
+        $this->assertSame(['The file has no course name (a "name" line in the course details).'],
+            CourseCsv::import(preg_replace('/^name,.*\n/m', '', $csv))['errors']);
+        $bad = str_replace('name,"Home Course"', 'name,"Third Course"', $csv);
+        $this->assertSame(['Line 36: hole number must be 1 to 18.'], CourseCsv::import($bad . "19,300\n")['errors']);
+        $this->dontSeeInDatabase('courses', ['name' => 'Third Course']);
+
+        // Without a file the page says so.
+        $this->asAdmin()->post('admin/courses/import')->assertSessionHas('error', 'Choose a CSV file to import.');
     }
 
     public function testCourseWebsiteIsSavedAndChecked(): void

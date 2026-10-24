@@ -3,7 +3,6 @@
 namespace App\Controllers\Admin;
 
 use App\Libraries\CourseCsv;
-use App\Libraries\CourseHoles;
 use App\Models\CourseModel;
 use App\Models\HoleModel;
 
@@ -16,6 +15,8 @@ class Courses extends CrudController
     protected array $listColumns = ['name', 'city', 'phone', 'active'];
     protected array $orderBy     = ['name' => 'ASC'];
     protected ?string $extraFormView = 'admin/courses/import';
+    protected ?string $extraIndexView = 'admin/courses/import_new';
+    protected array $headActions      = ['Import course' => '#import-course'];
 
     // Largest CSV file accepted for import.
     private const MAX_IMPORT_BYTES = 1024 * 1024;
@@ -69,62 +70,61 @@ class Courses extends CrudController
     {
         $this->findOr404($id);
         $back = redirect()->to("{$this->baseRoute}/{$id}/edit");
-        $file = $this->request->getFile('csv');
+        [$csv, $name, $error] = $this->uploadedCsv();
+        if ($error !== null) {
+            return $back->with('error', $error);
+        }
 
+        $result = CourseCsv::import($csv, $id);
+        if ($result['errors'] !== []) {
+            return $back->with('error', 'Nothing was imported. ' . implode(' ', $result['errors']));
+        }
+
+        return $back->with('message', "Imported the course details and {$result['holes']} holes from {$name}.");
+    }
+
+    /**
+     * Adds a new course, with its holes, from an uploaded CSV file (for
+     * example one exported from another copy of this site). Nothing is saved
+     * if anything in the file is invalid.
+     */
+    public function importNew()
+    {
+        $back = redirect()->to($this->baseRoute);
+        [$csv, $name, $error] = $this->uploadedCsv();
+        if ($error !== null) {
+            return $back->with('error', $error);
+        }
+
+        $result = CourseCsv::import($csv);
+        if ($result['errors'] !== []) {
+            return $back->with('error', 'Nothing was imported. ' . implode(' ', $result['errors']));
+        }
+        $course = (new CourseModel())->find($result['id']);
+
+        return redirect()->to("{$this->baseRoute}/{$result['id']}/edit")
+            ->with('message', "Added {$course['name']} with {$result['holes']} holes from {$name}. Check the details below and the holes.");
+    }
+
+    /**
+     * The uploaded CSV file's text and name, or an error if there is no
+     * suitable file.
+     *
+     * @return array{0: string, 1: string, 2: ?string} [text, file name, error]
+     */
+    private function uploadedCsv(): array
+    {
+        $file = $this->request->getFile('csv');
         if ($file === null || ! $file->isValid()) {
-            return $back->with('error', 'Choose a CSV file to import.');
+            return ['', '', 'Choose a CSV file to import.'];
         }
         if (! in_array(strtolower($file->getClientExtension()), ['csv', 'txt'], true)) {
-            return $back->with('error', 'The file must be a .csv file.');
+            return ['', '', 'The file must be a .csv file.'];
         }
         if ($file->getSize() > self::MAX_IMPORT_BYTES) {
-            return $back->with('error', 'The file is too large (1 MB at most).');
+            return ['', '', 'The file is too large (1 MB at most).'];
         }
 
-        $parsed = CourseCsv::parse((string) file_get_contents($file->getTempName()));
-        $errors = $parsed['errors'];
-
-        // Course details. A blank Active keeps the current setting.
-        $course = $parsed['course'];
-        if (array_key_exists('active', $course) && $course['active'] === null) {
-            unset($course['active']);
-        }
-        $courses = new CourseModel();
-        if ($course !== [] && ! $courses->validate(['id' => $id] + $course + ['name' => $courses->find($id)['name']])) {
-            $errors = [...$errors, ...array_values($courses->errors())];
-        }
-
-        // Holes: start from what is saved, then apply the file's values.
-        $existing = [];
-        foreach ((new HoleModel())->where('course_id', $id)->findAll() as $hole) {
-            $existing[(int) $hole['number']] = $hole;
-        }
-        $rows = [];
-        for ($number = 1; $number <= 18; $number++) {
-            if (! isset($parsed['holes'][$number]) && ! isset($existing[$number])) {
-                continue;
-            }
-            $values        = array_merge($existing[$number] ?? [], $parsed['holes'][$number] ?? []);
-            $rows[$number] = CourseHoles::row($id, $number, CourseCsv::holeFields(), $values);
-        }
-        foreach (CourseHoles::errors($rows) as $number => $error) {
-            $errors[] = "Hole {$number}: {$error}";
-        }
-
-        if ($errors !== []) {
-            return $back->with('error', 'Nothing was imported. ' . implode(' ', $errors));
-        }
-
-        $db = db_connect();
-        $db->transStart();
-        if ($course !== []) {
-            $courses->update($id, ['id' => $id] + $course);
-        }
-        CourseHoles::save($id, $rows);
-        $db->transComplete();
-
-        $holeCount = count($parsed['holes']);
-
-        return $back->with('message', "Imported the course details and {$holeCount} holes from {$file->getClientName()}.");
+        return [(string) file_get_contents($file->getTempName()), $file->getClientName(), null];
     }
 }

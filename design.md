@@ -76,6 +76,7 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
   - Adj - One per hole
   - Image
 - The holes edit page shows yardage and par for each tee, then Hcp, Net and Adj, with front 9, back 9 and total rows for yardage and par.
+- Course CSV: each course can be exported as a CSV file (course details, then its holes). On a course's edit page a CSV file updates that course; on the courses list, "Import course" adds a new course with its holes from a CSV file (the name must not already be used). Nothing is saved if the file has errors.
 
 ### 2.4 Players
 - As admin, I want to be able to create/update/delete players
