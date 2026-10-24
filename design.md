@@ -21,7 +21,7 @@ This golf league management software will manage a public 9-hole golf league. Th
      - League status page, player status page, round results page
      - Email to all players
 - **Phase 5:** Automatic handicap calculation. Until then the admin enters each player's handicap. Needs course rating and slope per tee per nine (see 2.2).
-- **Later phases:** text messages to players, online payment, game voting, messages between players and from guests to the admin.
+- **Later phases:** text messages to players, online payment, the full game voting in section 2.10 below (a simple version is in 2.8), messages between players and from guests to the admin.
 
 The detailed design kept below "Ignore all below here for the time being" (including the decisions log, D#) is for later phases and is not part of the current build.
 
@@ -38,7 +38,7 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
   - Website
   - Email
   - Active
-  - Notice - a message for players, set from the "Notice" link on the leagues list (multi-line text). The notice is shown under the heading "League Notice" on the player's page once they are logged in (their league's notice, or the current league's); blank shows nothing.
+  - Notice - a message for players, set from the "Notice" link on the leagues list (multi-line text). The notice is shown under the heading "League Notice" on the player's page once they are logged in (their league's notice, or the current league's). A blank notice shows nothing.; blank shows nothing.
 
 ### 2.2 Courses
 - As admin, I want to be able to create/update/delete golf courses.
@@ -149,6 +149,9 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
   - Description
   - Scoring info - TBD
   - Active
+- Game votes (simple version for now): on their page after logging in, players see their league's rounds (date, name, course, game, status; status is display only). For a scheduled round they can pick one of the league's active games and vote. One vote per player per round, and it can't be changed.
+  - game_votes - Round Id, Game Id, Count (one row per game voted for in a round; each vote adds 1)
+  - game_voters - Round Id, Player Id, Game Id (who has voted in a round, so a player votes only once)
 
 ### 2.9 Scores
 - A score record is a player's entry for one round. It is created when the player says they will play (or when the admin adds them), before any golf is played.

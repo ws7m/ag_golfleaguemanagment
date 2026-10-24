@@ -13,6 +13,7 @@ $routes->get('logout', 'Auth::logout');
 
 $routes->group('player', ['filter' => 'playerauth', 'namespace' => 'App\Controllers\Player'], static function ($routes) {
     $routes->get('/', 'Home::index');
+    $routes->post('rounds/(:num)/vote', 'Home::vote/$1');
 });
 
 // Admin screens.

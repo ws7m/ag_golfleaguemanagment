@@ -149,6 +149,7 @@ tbody tr:last-child td { border-bottom: 0; }
 .row-actions { display: flex; align-items: baseline; gap: 0.75rem; }
 .row-form { display: inline; margin: 0; }
 .row-select { width: auto; padding: 0.2rem 0.4rem; font-size: 0.9rem; }
+.vote-form { display: inline-flex; align-items: center; gap: 0.5rem; }
 
 /* Hole score boxes on the scores list: two digits each. */
 .hole-cells { display: inline-flex; gap: 2px; }
