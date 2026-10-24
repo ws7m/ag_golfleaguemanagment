@@ -61,6 +61,7 @@ $routes->group('admin', ['filter' => 'adminauth', 'namespace' => 'App\Controller
     $routes->post('courses/(:num)/import', 'Courses::import/$1');
     $routes->get('groups/tee-sheet', 'Groups::teeSheet');
     $routes->get('groups/tee-sheet/pdf', 'Groups::teeSheetPdf');
+    $routes->post('groups/tee-sheet/email', 'Groups::emailTeeSheets');
     $routes->post('groups/generate', 'Groups::generate');
     $routes->post('groups/switch-nine', 'Groups::switchNine');
     $routes->post('groups/shift-tee-times', 'Groups::shiftTeeTimes');
@@ -68,4 +69,5 @@ $routes->group('admin', ['filter' => 'adminauth', 'namespace' => 'App\Controller
     $routes->post('groups/delete-all', 'Groups::deleteAll');
     $routes->get('settings', 'Settings::edit');
     $routes->post('settings', 'Settings::update');
+    $routes->post('settings/test-email', 'Settings::testEmail');
 });

@@ -119,6 +119,7 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
   - Active
 - The groups list shows only the tee time for the nine each group is playing now, and clicking Front/Back switches it.
 - Tee time list: separate Front and Back lists (and PDFs) for a round chosen from a dropdown (default: the next round from today). The round's date is in each heading and the PDF file name. Players who said they are not playing in that round are left off and their place shows as Open.
+  - Above the lists: a Notice box for a message, and an "Email tee sheets" button that emails the message and both PDFs to every active player registered in the league who has an email address (one email each). Players without an email address are listed so the admin can tell them another way.
 - Admin can shift every group's front nine tee time, or every group's back nine tee time, earlier or later by a number of minutes (e.g. for daylight changes during the season). Two groups may have the same tee time.
 - Who actually played in a group in a given round, and which nine they played, is recorded on each player's score record for that round (Group Id and Front or back, see 2.9). This keeps a full history without changing the group each week.
 
@@ -179,6 +180,7 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
   - Image - Score card picture
 
 ### 2.10 Settings and login
+- Email server (SMTP): host, port, security (TLS/SSL/none), username, password (stored encrypted with the app key), From email and name. Replies go to the admin contact email. A "Send test email" button checks the settings.
 - One settings record for the site:
   - Id
   - Admin contact name

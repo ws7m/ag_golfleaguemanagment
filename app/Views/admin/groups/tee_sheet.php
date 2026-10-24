@@ -27,6 +27,36 @@
 <p class="muted">The round's date is shown in each list's heading and used in the PDF file name.
     Players who said they are not playing in the round are left off, and their place shows as Open.</p>
 
+<form method="post" action="<?= site_url('admin/groups/tee-sheet/email') ?>" id="tee-email">
+    <?= csrf_field() ?>
+    <input type="hidden" name="league_id" value="<?= esc((string) ($league['id'] ?? ''), 'attr') ?>">
+    <input type="hidden" name="round_id" value="<?= esc((string) ($round['id'] ?? ''), 'attr') ?>">
+</form>
+
+<section class="panel">
+    <h2><label for="tee_message">Notice</label></h2>
+    <p class="muted">A message sent with the tee time lists, above the attached PDFs. Optional.</p>
+    <textarea id="tee_message" name="message" form="tee-email" rows="5"><?= esc(old('message') ?? '') ?></textarea>
+</section>
+
+<section class="panel">
+    <h2>Email the tee time lists</h2>
+    <?php $count = count($recipients['send']); ?>
+    <?php if (! $mailReady): ?>
+        <p>Email isn't set up yet. Enter the email server details on the <a href="<?= site_url('admin/settings#email-server') ?>">Settings</a> page.</p>
+    <?php elseif ($round === null): ?>
+        <p class="muted">Add a round to this league first.</p>
+    <?php else: ?>
+        <p>Sends the notice and the Front and Back lists for <strong><?= esc($date) ?></strong> to
+            <strong><?= $count ?></strong> <?= $count === 1 ? 'player' : 'players' ?> registered in this league, one email each.</p>
+        <?php if ($recipients['noEmail'] !== []): ?>
+            <p class="muted">No email address, so not sent: <?= esc(implode(', ', $recipients['noEmail'])) ?>.</p>
+        <?php endif ?>
+        <button type="submit" form="tee-email" <?= $count === 0 ? 'disabled' : '' ?>
+                onclick="return confirm('Email the tee time lists to <?= $count ?> players?')">Email tee sheets</button>
+    <?php endif ?>
+</section>
+
 <div class="panel-pair">
 <?php foreach (['front' => 'Front', 'back' => 'Back'] as $nine => $label): ?>
     <section class="panel">

@@ -3,6 +3,7 @@
 namespace App\Controllers\Admin;
 
 use App\Libraries\Lookup;
+use App\Libraries\Mailer;
 use App\Libraries\RoundEntries;
 use App\Models\LeagueGroupModel;
 use App\Models\LeagueModel;
@@ -192,6 +193,8 @@ class Groups extends CrudController
             'round'    => $round,
             'rounds'   => $rounds,
             'date'     => $date,
+            'mailReady'  => Mailer::isConfigured(),
+            'recipients' => $this->teeSheetRecipients($leagueId),
             'sections' => [
                 'front' => $this->teeSheetRows($leagueId, 'front', $notPlaying),
                 'back'  => $this->teeSheetRows($leagueId, 'back', $notPlaying),
@@ -208,20 +211,118 @@ class Groups extends CrudController
         [$leagueId, $league, $round, $date] = $this->teeSheetRequest();
         $nine = $this->request->getGet('nine') === 'back' ? 'back' : 'front';
 
-        $html = view('admin/groups/tee_sheet_pdf', [
-            'heading' => self::teeSheetHeading($league['name'] ?? '', $nine, $date),
-            'rows'    => $this->teeSheetRows($leagueId, $nine, $this->playersNotPlaying($round)),
-        ]);
-
-        $pdf = new Dompdf();
-        $pdf->loadHtml($html);
-        $pdf->setPaper('letter', 'portrait');
-        $pdf->render();
+        $pdf = $this->teeSheetPdfBytes($league, $nine, $date, $this->teeSheetRows($leagueId, $nine, $this->playersNotPlaying($round)));
 
         return $this->response
             ->setHeader('Content-Type', 'application/pdf')
             ->setHeader('Content-Disposition', 'attachment; filename="' . self::teeSheetFilename($nine, $date) . '"')
-            ->setBody($pdf->output());
+            ->setBody($pdf);
+    }
+
+    /**
+     * Emails the message from the Notice box and the front and back tee
+     * time lists (as PDFs) to every active player registered in the league
+     * who has an email address, one message each.
+     */
+    public function emailTeeSheets()
+    {
+        [$leagueId, $league, $round, $date] = $this->teeSheetRequest();
+        $message = trim((string) $this->request->getPost('message'));
+        $back    = redirect()->to('admin/groups/tee-sheet?' . http_build_query(['league_id' => $leagueId, 'round_id' => $round['id'] ?? '']))->withInput();
+
+        $settings = Mailer::settings();
+        if (! Mailer::isConfigured($settings)) {
+            return $back->with('error', 'Nothing was sent. Set up the email server on the Settings page first.');
+        }
+        if ($league === null || $round === null) {
+            return $back->with('error', 'Nothing was sent. Choose a league and a round.');
+        }
+        ['send' => $send, 'noEmail' => $noEmail] = $this->teeSheetRecipients($leagueId);
+        if ($send === []) {
+            return $back->with('error', 'Nothing was sent. No players in this league have an email address.');
+        }
+
+        $notPlaying  = $this->playersNotPlaying($round);
+        $attachments = [];
+        foreach (['front', 'back'] as $nine) {
+            $attachments[self::teeSheetFilename($nine, $date)] = $this->teeSheetPdfBytes($league, $nine, $date, $this->teeSheetRows($leagueId, $nine, $notPlaying));
+        }
+        $subject = "{$league['name']} - Tee times - {$date}";
+        $body    = ($message !== '' ? $message . "\n\n" : '')
+            . "The tee time lists for {$date} are attached: one for the front nine and one for the back nine.\n";
+
+        // Sending one at a time can take a while for a big league.
+        set_time_limit(0);
+        $email  = Mailer::email($settings);
+        $sent   = 0;
+        $failed = [];
+        foreach ($send as $player) {
+            Mailer::message($email, $settings);
+            $email->setTo($player['email']);
+            $email->setSubject($subject);
+            $email->setMessage($body);
+            foreach ($attachments as $filename => $pdf) {
+                $email->attach($pdf, 'attachment', $filename, 'application/pdf');
+            }
+            if ($email->send(false)) {
+                $sent++;
+            } else {
+                $failed[] = $player['name'];
+                log_message('error', "Tee sheet email to player {$player['id']} failed: " . $email->printDebugger(['headers']));
+            }
+        }
+
+        $note = "Tee sheets emailed to {$sent} " . ($sent === 1 ? 'player' : 'players') . '.';
+        if ($noEmail !== []) {
+            $note .= ' Not sent (no email address): ' . implode(', ', $noEmail) . '.';
+        }
+        if ($failed !== []) {
+            return $back->with('error', $note . ' Could not send to: ' . implode(', ', $failed) . '. Check the email server settings.');
+        }
+
+        return redirect()->to('admin/groups/tee-sheet?' . http_build_query(['league_id' => $leagueId, 'round_id' => $round['id']]))
+            ->with('message', $note);
+    }
+
+    /**
+     * Active players registered in the league: those with an email address
+     * to send to, and the names of those without one.
+     *
+     * @return array{send: list<array{id: int, name: string, email: string}>, noEmail: list<string>}
+     */
+    private function teeSheetRecipients(int $leagueId): array
+    {
+        $players = (new PlayerModel())
+            ->where('league_id', $leagueId)->where('is_player', 1)->where('active', 1)
+            ->orderBy('last_name')->orderBy('first_name')
+            ->findAll();
+
+        $send    = [];
+        $noEmail = [];
+        foreach ($players as $player) {
+            $name  = "{$player['first_name']} {$player['last_name']}";
+            $email = trim((string) $player['email']);
+            if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $send[] = ['id' => (int) $player['id'], 'name' => $name, 'email' => $email];
+            } else {
+                $noEmail[] = $name;
+            }
+        }
+
+        return ['send' => $send, 'noEmail' => $noEmail];
+    }
+
+    private function teeSheetPdfBytes(?array $league, string $nine, string $date, array $rows): string
+    {
+        $pdf = new Dompdf();
+        $pdf->loadHtml(view('admin/groups/tee_sheet_pdf', [
+            'heading' => self::teeSheetHeading($league['name'] ?? '', $nine, $date),
+            'rows'    => $rows,
+        ]));
+        $pdf->setPaper('letter', 'portrait');
+        $pdf->render();
+
+        return (string) $pdf->output();
     }
 
     /**
@@ -247,7 +348,7 @@ class Groups extends CrudController
     }
 
     /**
-     * League and round from the query string. Without a round (or with one
+     * League and round from the query string (or posted form). Without a round (or with one
      * from another league) the league's next round from today is used, or
      * its last round if none are left. The round's date is shown as
      * month/day/year, e.g. 5/4/2027; with no rounds there is no date.
@@ -257,11 +358,12 @@ class Groups extends CrudController
      */
     private function teeSheetRequest(): array
     {
-        $leagueId = (int) ($this->request->getGet('league_id') ?: Lookup::currentLeagueId());
+        // From the query string, or the posted form when emailing.
+        $leagueId = (int) ($this->request->getVar('league_id') ?: Lookup::currentLeagueId());
         $rounds   = (new RoundModel())->where('league_id', $leagueId)->orderBy('round_date')->orderBy('id')->findAll();
         $byId     = array_column($rounds, null, 'id');
 
-        $round = $byId[(int) $this->request->getGet('round_id')] ?? null;
+        $round = $byId[(int) $this->request->getVar('round_id')] ?? null;
         if ($round === null && $rounds !== []) {
             $today = date('Y-m-d');
             $next  = array_values(array_filter($rounds, static fn ($r) => $r['round_date'] >= $today));
