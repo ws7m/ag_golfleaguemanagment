@@ -15,7 +15,7 @@
         <?php foreach ($filters as $name): ?>
             <label for="filter_<?= esc($name, 'attr') ?>"><?= esc($fields[$name]['label']) ?></label>
             <select id="filter_<?= esc($name, 'attr') ?>" name="<?= esc($name, 'attr') ?>" onchange="this.form.submit()">
-                <option value="">All</option>
+                <?php if (! in_array($name, $requiredFilters, true)): ?><option value="">All</option><?php endif ?>
                 <?php foreach ($fields[$name]['options'] as $key => $label): ?>
                     <option value="<?= esc((string) $key, 'attr') ?>" <?= (string) ($filterValues[$name] ?? '') === (string) $key ? 'selected' : '' ?>><?= esc($label) ?></option>
                 <?php endforeach ?>

@@ -48,6 +48,12 @@ abstract class CrudController extends BaseController
     protected array $filters = [];
 
     /**
+     * @var list<string> Filters that always have a choice: no "All" option,
+     *      and defaultFilter() gives the choice when none is made.
+     */
+    protected array $requiredFilters = [];
+
+    /**
      * @var array<string, string> Column => ASC|DESC for the list order. A
      *      column may be an SQL expression such as 'LOWER(last_name)'.
      */
@@ -117,6 +123,14 @@ abstract class CrudController extends BaseController
     }
 
     /**
+     * The choice for a required filter when none is made, or null.
+     */
+    protected function defaultFilter(string $name): ?string
+    {
+        return null;
+    }
+
+    /**
      * Adds values for listFields() to the rows on the list page.
      *
      * @param array<string, string> $filterValues The list filters in use
@@ -139,6 +153,9 @@ abstract class CrudController extends BaseController
             $value = $this->request->getGet($name);
             if ($value === null && ($this->fields()[$name]['default'] ?? null) === 'currentLeague') {
                 $value = (string) Lookup::currentLeagueId();
+            }
+            if (($value === null || $value === '') && in_array($name, $this->requiredFilters, true)) {
+                $value = $this->defaultFilter($name);
             }
             if ($value !== null && $value !== '') {
                 $model->where($name, $value);
@@ -297,6 +314,7 @@ abstract class CrudController extends BaseController
             'baseRoute' => $this->baseRoute,
             'columns'   => $this->listColumns,
             'filters'   => $this->filters,
+            'requiredFilters' => $this->requiredFilters,
             'actions'   => $this->rowActions(),
             'actionsBeforeEdit' => $this->rowActionsBeforeEdit(),
             'toggleColumns' => $this->toggleColumns,

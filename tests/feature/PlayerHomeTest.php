@@ -174,6 +174,14 @@ final class PlayerHomeTest extends CIUnitTestCase
         $this->assertSame(9, substr_count($body, 'name="holes[hole'));
         $this->assertStringContainsString('name="holes[hole9]"', $body);
         $this->assertStringContainsString('Par 36', $body);
+        $this->assertStringContainsString("The game for this round hasn't been set yet.", $body);
+
+        // The game line says which game, and whether it's a team game.
+        $db->table('games')->insert(['league_id' => $this->leagueId, 'name' => 'Best Ball', 'team_game' => 1]);
+        $db->table('rounds')->where('id', $roundId)->update(['game_id' => $db->insertID()]);
+        $body = $this->asPlayer()->get('player/score')->response()->getBody();
+        $this->assertMatchesRegularExpression('#Game: <strong>Best Ball</strong> ·\s*<strong>Team game</strong>#', $body);
+        $this->assertLessThan(strpos($body, 'name="holes[hole1]"'), strpos($body, 'Best Ball'));
 
         // Partly entered: saved without a total. No score record yet, so one is added.
         $holes = ['hole1' => '5', 'hole2' => '4', 'hole3' => ''];

@@ -1041,6 +1041,54 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->assertStringContainsString('<td>Scramble / Skins (3)</td>', $this->asAdmin()->get("admin/rounds?league_id={$leagueId}")->response()->getBody());
     }
 
+    public function testTeamGameFlagAndScoresRoundChoice(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League', 'active' => 1]);
+        $courseId = (new CourseModel())->insert(['name' => 'Course']);
+
+        // A game can be marked as a team game; the games list shows it after Name.
+        $this->asAdmin()->post('admin/games', ['league_id' => $leagueId, 'name' => 'Best Ball', 'team_game' => '1', 'active' => '1'])
+            ->assertRedirectTo('/admin/games');
+        $this->seeInDatabase('games', ['name' => 'Best Ball', 'team_game' => 1]);
+        $this->asAdmin()->post('admin/games', ['league_id' => $leagueId, 'name' => 'Skins', 'active' => '1']);
+        $this->seeInDatabase('games', ['name' => 'Skins', 'team_game' => 0]);
+        $html = $this->asAdmin()->get("admin/games?league_id={$leagueId}")->response()->getBody();
+        $this->assertMatchesRegularExpression('#<th>Name</th>\s*<th>Team</th>#', $html);
+        $bestBall = (int) db_connect()->table('games')->where('name', 'Best Ball')->get()->getRow()->id;
+
+        $rounds = new RoundModel();
+        $past   = $rounds->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2000-05-01', 'name' => 'Round 1', 'game_id' => $bestBall, 'status' => 'scored']);
+        $next   = $rounds->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2099-05-08', 'name' => 'Round 2']);
+        $later  = $rounds->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2099-05-15', 'name' => 'Round 3']);
+        $ann    = (new PlayerModel())->insert(['first_name' => 'Ann', 'last_name' => 'Ames', 'league_id' => $leagueId]);
+        $bob    = (new PlayerModel())->insert(['first_name' => 'Bob', 'last_name' => 'Baker', 'league_id' => $leagueId]);
+        db_connect()->table('scores')->insertBatch([
+            ['league_id' => $leagueId, 'round_id' => $past, 'player_id' => $ann],
+            ['league_id' => $leagueId, 'round_id' => $next, 'player_id' => $bob],
+        ]);
+
+        // Rounds are listed as date - name - game - team, with no "All", and
+        // without a choice the next round from today is shown.
+        $html = $this->asAdmin()->get('admin/scores')->response()->getBody();
+        $this->assertStringContainsString('2000-05-01 - Round 1 - Best Ball - Team: Yes</option>', $html);
+        $this->assertStringContainsString("<option value=\"{$next}\" selected>2099-05-08 - Round 2 - No game set - Team: —</option>", $html);
+        $this->assertStringNotContainsString('<option value="">All</option>', $html);
+        $this->assertStringContainsString('Baker, Bob', $html);
+        $this->assertStringNotContainsString('Ames, Ann', $html);
+        $this->assertStringNotContainsString('<th>Round</th>', $html);
+
+        // An active round is shown first when there is one.
+        $rounds->update($past, ['status' => 'active']);
+        $html = $this->asAdmin()->get('admin/scores')->response()->getBody();
+        $this->assertStringContainsString('Ames, Ann', $html);
+        $this->assertStringNotContainsString('Baker, Bob', $html);
+
+        // A chosen round is shown.
+        $html = $this->asAdmin()->get("admin/scores?round_id={$later}")->response()->getBody();
+        $this->assertStringNotContainsString('Ames, Ann', $html);
+        $this->assertStringNotContainsString('Baker, Bob', $html);
+    }
+
     public function testDeleteAllPlayersKeepsAdminsAndPlayersWithScores(): void
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'League']);

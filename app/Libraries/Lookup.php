@@ -105,16 +105,6 @@ class Lookup
     }
 
     /**
-     * Short round labels for list pages: just the date.
-     */
-    public static function roundsShort(): array
-    {
-        $rows = db_connect()->table('rounds')->select('id, round_date')->get()->getResultArray();
-
-        return self::labels($rows, static fn ($r) => (string) $r['round_date']);
-    }
-
-    /**
      * Short group labels for list pages, without the league.
      */
     public static function groupsShort(): array
@@ -122,6 +112,26 @@ class Lookup
         $rows = db_connect()->table('league_groups')->select('id, group_number, active')->get()->getResultArray();
 
         return self::labels($rows, static fn ($r) => "Group {$r['group_number']}");
+    }
+
+    /**
+     * Rounds for the scores page's round choice, newest first:
+     * "2027-06-07 - Round 1 - Skins - Team: Yes".
+     */
+    public static function roundsWithGame(): array
+    {
+        $rows = db_connect()->table('rounds r')
+            ->select('r.id, r.round_date, r.name, g.name AS game, g.team_game')
+            ->join('games g', 'g.id = r.game_id', 'left')
+            ->orderBy('r.round_date', 'DESC')->orderBy('r.id', 'DESC')
+            ->get()->getResultArray();
+
+        return self::labels($rows, static fn ($r) => implode(' - ', [
+            $r['round_date'],
+            ($r['name'] ?? '') !== '' ? $r['name'] : 'No name',
+            $r['game'] ?? 'No game set',
+            'Team: ' . ($r['game'] === null ? '—' : ($r['team_game'] ? 'Yes' : 'No')),
+        ]));
     }
 
     public static function rounds(): array

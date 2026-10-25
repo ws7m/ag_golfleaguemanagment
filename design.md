@@ -151,12 +151,13 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
   - Name
   - Description
   - Scoring info - TBD
+  - Team game - Yes/No; in a team game, players in a round with the same team number are a team. Shown on the games list after Name.
   - Active
 - Game votes (simple version for now): on their page after logging in, players see their league's rounds (date, name, course, game, status; status is display only). For a scheduled round they can pick one of the league's active games and vote. One vote per player per round, and it can't be changed.
   - game_votes - Round Id, Game Id, Count (one row per game voted for in a round; each vote adds 1)
   - game_voters - Round Id, Player Id, Game Id (who has voted in a round, so a player votes only once)
 - Admin rounds list: the Game column is a dropdown that saves as soon as a game is chosen, and a "Game votes" column shows the game players voted for most in each round with its count (ties show each game).
-- Score entry: when the league has an active round, the player's page shows an "Enter scores" button above the rounds list. It opens a page with the player's nine holes on one line (with par from their tees) and a Save button; gross and net show once all nine are entered. Saving marks the player as playing. Locked scores can't be changed.
+- Score entry: when the league has an active round, the player's page shows an "Enter scores" button above the rounds list. It opens a page that names the round's game and whether it's a team game, then the player's nine holes on one line (with par from their tees) and a Save button; gross and net show once all nine are entered. Saving marks the player as playing. Locked scores can't be changed.
 - Playing: the player's rounds list has a Playing box for scheduled and active rounds, ticked by default. For a scheduled round the choice is kept in round_playing (Round Id, Player Id, Playing) and used when the round is made active and score records are created. For an active round it sets Playing on the player's score record, adding the record if they don't have one. Closed and scored rounds show Yes/No only.
 
 ### 2.9 Scores
@@ -173,6 +174,7 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
   - Paid - Yes/No; set by admin when the entry fee is paid
   - Locked
   - Team number - Players in the same round with the same team number are a team (for team games); 0 = an individual score. Default 0. Entered on the scores list or edit page; "Teams = groups" sets each player's team to their group number for a round. Saving warns about teams of 1 player or more than 4. No separate teams table for now.
+- The admin scores page always shows one round, chosen from a list of "date - round name - game - Team: Yes/No" (no "All"). Without a choice it shows the active round, else the next round from today, else the most recent. The list has no Round column.
   - Hole1 to Hole18 - Strokes per hole; 0 (or blank) means not entered yet. Only the nine played is filled in.
   - Gross - Total strokes
   - Handicap used - The player's handicap applied in this round

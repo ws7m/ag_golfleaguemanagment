@@ -12,7 +12,7 @@ class Scores extends CrudController
     protected string $title      = 'Scores';
     protected string $singular   = 'Score';
     protected string $baseRoute  = 'admin/scores';
-    protected array $listColumns = ['round_id', 'player_id', 'nine', 'playing', 'paid', 'team_number', 'holes', 'gross', 'net', 'place', 'winnings_cents'];
+    protected array $listColumns = ['player_id', 'nine', 'playing', 'paid', 'team_number', 'holes', 'gross', 'net', 'place', 'winnings_cents'];
     // Clicking Yes/No for Playing or Paid on the list switches it.
     protected array $toggleColumns = [
         'playing' => 'admin/scores/{id}/toggle/playing',
@@ -23,7 +23,9 @@ class Scores extends CrudController
 
     // Teams of more players than this get a warning when saved.
     public const MAX_TEAM_SIZE = 4;
-    protected array $filters     = ['round_id'];
+    // The list always shows one round, chosen at the top.
+    protected array $filters         = ['round_id'];
+    protected array $requiredFilters = ['round_id'];
     // Newest round first; within a round, teams together (team 1, team 2, ...)
     // with individual scores (team 0) after them.
     protected array $orderBy = [
@@ -38,7 +40,7 @@ class Scores extends CrudController
     protected function fields(): array
     {
         $fields = [
-            'round_id'  => ['label' => 'Round', 'type' => 'select', 'options' => 'rounds', 'listOptions' => 'roundsShort', 'required' => true],
+            'round_id'  => ['label' => 'Round', 'type' => 'select', 'options' => 'rounds', 'listOptions' => 'roundsWithGame', 'required' => true],
             'player_id' => ['label' => 'Player', 'type' => 'select', 'options' => 'players', 'listOptions' => 'playerNames', 'required' => true],
             'group_id'  => ['label' => 'Group played in', 'type' => 'select', 'options' => 'groups', 'listOptions' => 'groupsShort'],
             'nine'      => ['label' => 'Nine played', 'listLabel' => 'Nine', 'type' => 'select', 'options' => ['front' => 'Front', 'back' => 'Back']],
@@ -88,6 +90,20 @@ class Scores extends CrudController
         $from = $round ? 'the ' . trim("{$round['round_date']} {$round['name']}") . ' round' : 'every round in the league';
 
         return $back->with('message', "{$count} scores deleted from {$from}.");
+    }
+
+    /**
+     * Without a round chosen, show the active round (the latest if more than
+     * one), else the next round from today, else the most recent one.
+     */
+    protected function defaultFilter(string $name): ?string
+    {
+        $rounds = (new RoundModel())->orderBy('round_date', 'DESC')->orderBy('id', 'DESC')->findAll();
+        $active = array_values(array_filter($rounds, static fn ($r) => $r['status'] === 'active'));
+        $next   = array_values(array_filter($rounds, static fn ($r) => $r['round_date'] >= date('Y-m-d')));
+        $round  = $active[0] ?? end($next) ?: ($rounds[0] ?? null);
+
+        return $round ? (string) $round['id'] : null;
     }
 
     protected function listFields(): array

@@ -11,6 +11,14 @@ $roundName = trim(date('n/j/Y', strtotime($round['round_date'])) . ' ' . ($round
 <p><strong><?= esc($roundName) ?></strong><?= $course !== '' ? ' · ' . esc($course) : '' ?> ·
     <?= $nine === 'back' ? 'Back nine' : 'Front nine' ?>
     <?php if ($score['handicap_used'] !== null): ?> · Handicap <?= (int) $score['handicap_used'] ?><?php endif ?></p>
+<p class="game-line">
+    <?php if ($game === null): ?>
+        <span class="muted">The game for this round hasn't been set yet.</span>
+    <?php else: ?>
+        Game: <strong><?= esc($game['name']) ?></strong> ·
+        <?= $game['team_game'] ? '<strong>Team game</strong>' . ((int) ($score['team_number'] ?? 0) > 0 ? ' (you are on team ' . (int) $score['team_number'] . ')' : '') : 'Individual game' ?>
+    <?php endif ?>
+</p>
 
 <?php if ($locked): ?>
     <p class="flash flash-error">Your score for this round is locked. Ask the league admin if something needs changing.</p>

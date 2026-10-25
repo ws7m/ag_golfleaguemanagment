@@ -147,6 +147,7 @@ class Home extends BaseController
             'holes'  => ScoreModel::holesForNine($nine),
             'pars'   => array_column($holes, 'par', 'number'),
             'course' => db_connect()->table('courses')->where('id', $round['course_id'])->get()->getRowArray()['name'] ?? '',
+            'game'   => $round['game_id'] ? db_connect()->table('games')->where('id', $round['game_id'])->get()->getRowArray() : null,
         ]);
     }
 

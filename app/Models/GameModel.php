@@ -10,11 +10,12 @@ class GameModel extends Model
     protected $primaryKey    = 'id';
     protected $returnType    = 'array';
     protected $useTimestamps = true;
-    protected $allowedFields = ['league_id', 'name', 'description', 'scoring_info', 'active'];
+    protected $allowedFields = ['league_id', 'name', 'description', 'scoring_info', 'team_game', 'active'];
 
     protected $validationRules = [
         'league_id' => 'required|is_natural_no_zero',
         'name'      => 'required|max_length[100]',
+        'team_game' => 'permit_empty|in_list[0,1]',
         'active'    => 'permit_empty|in_list[0,1]',
     ];
 }
