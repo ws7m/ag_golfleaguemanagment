@@ -698,13 +698,13 @@ final class AdminScreensTest extends CIUnitTestCase
 
         $this->asAdmin()->post('admin/scores/save', ['scores' => [$ids['Dunn'] => ['team_number' => '100']]])->assertSessionHas('error');
 
-        // Team 2 with 5 players gets a warning.
-        foreach (['Eads', 'Ford'] as $last) {
+        // Team 2 with 6 players (more than 5) gets a warning.
+        foreach (['Eads', 'Ford', 'Gray'] as $last) {
             $playerId = (new PlayerModel())->insert(['first_name' => 'Pat', 'last_name' => $last, 'league_id' => $leagueId]);
             $db->table('scores')->insert(['league_id' => $leagueId, 'round_id' => $roundId, 'player_id' => $playerId, 'team_number' => 2]);
         }
         $this->asAdmin()->post('admin/scores/save', ['scores' => [$ids['Dunn'] => ['team_number' => '0']]])
-            ->assertSessionHas('message', '1 scores saved. Check teams: Team 2 has 5 players.');
+            ->assertSessionHas('message', '1 scores saved. Check teams: Team 2 has 6 players.');
 
         // The list shows teams together, team 0 last.
         $html = $this->asAdmin()->get("admin/scores?round_id={$roundId}")->getBody();
@@ -1110,14 +1110,15 @@ final class AdminScreensTest extends CIUnitTestCase
             'league_id' => $leagueId, 'round_id' => $roundId, 'player_id' => $ids[$last], 'team_number' => $team,
             'team_member1_id' => $members[0] ?? null, 'team_member2_id' => $members[1] ?? null,
             'team_member3_id' => $members[2] ?? null, 'team_member4_id' => $members[3] ?? null,
+            'team_member5_id' => $members[4] ?? null,
         ];
         $db->table('scores')->insertBatch([
             // Ames named Baker; Cole named Baker too, so all three are one team.
             $score('Ames', [$ids['Ames'], $ids['Baker']]),
             $score('Baker'),
             $score('Cole', [$ids['Baker']]),
-            // Dunn and Eads named each other.
-            $score('Dunn', [$ids['Dunn'], $ids['Eads']]),
+            // Dunn and Eads named each other (Eads in the fifth box).
+            $score('Dunn', [null, null, null, null, $ids['Eads']]),
             $score('Eads', [$ids['Dunn'], $ids['Eads']]),
             // Ford named only Hill, who isn't in this round; Gray named nobody.
             $score('Ford', [$outside]),
@@ -1147,7 +1148,7 @@ final class AdminScreensTest extends CIUnitTestCase
         $scoreId = (int) db_connect()->insertID();
 
         $html = $this->asAdmin()->get("admin/scores/{$scoreId}/edit")->response()->getBody();
-        $this->assertSame(4, substr_count($html, 'name="team_member'));
+        $this->assertSame(5, substr_count($html, 'name="team_member'));
         $this->assertMatchesRegularExpression('#name="team_member2_id".*?<option value="' . $bob . '" selected>Bob Baker</option>#s', $html);
 
         $form = ['round_id' => $roundId, 'player_id' => $ann, 'playing' => '1', 'team_member1_id' => (string) $ann, 'team_member2_id' => (string) $bob, 'team_member3_id' => ''];

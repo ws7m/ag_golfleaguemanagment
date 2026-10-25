@@ -69,6 +69,7 @@ $roundName = trim(date('n/j/Y', strtotime($round['round_date'])) . ' ' . ($round
         ?>
         <fieldset class="team-members" <?= $locked ? 'disabled' : '' ?>>
             <legend>Your team</legend>
+            <p class="team-note">Include yourself in the team selections</p>
             <div class="grid">
                 <?php foreach ($members as $i => $memberId): ?>
                     <div class="field">

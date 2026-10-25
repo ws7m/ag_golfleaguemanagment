@@ -22,7 +22,7 @@ class Scores extends CrudController
     protected array $cellViews = ['team_number' => 'admin/scores/team_cell', 'holes' => 'admin/scores/hole_cells'];
 
     // Teams of more players than this get a warning when saved.
-    public const MAX_TEAM_SIZE = 4;
+    public const MAX_TEAM_SIZE = ScoreModel::TEAM_MEMBER_SLOTS;
     // The list always shows one round, chosen at the top.
     protected array $filters         = ['round_id'];
     protected array $requiredFilters = ['round_id'];
@@ -302,7 +302,7 @@ class Scores extends CrudController
     }
 
     /**
-     * A sentence warning about teams with only 1 player or more than 4, in
+     * A sentence warning about teams with only 1 player or more than 5, in
      * the given rounds, or an empty string.
      *
      * @param list<int> $roundIds

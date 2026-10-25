@@ -269,7 +269,8 @@ final class PlayerHomeTest extends CIUnitTestCase
         $body = $this->asPlayer()->get("player/score/{$roundId}")->response()->getBody();
         $this->assertStringContainsString('All team members should enter the same score on every hole for team games.', $body);
         $this->assertLessThan(strpos($body, 'All team members'), strpos($body, 'Game: <strong>Skins'));
-        $this->assertSame(4, substr_count($body, 'name="team_members['));
+        $this->assertSame(5, substr_count($body, 'name="team_members['));
+        $this->assertLessThan(strpos($body, 'name="team_members[1]'), strpos($body, 'Include yourself in the team selections'));
         // Players are listed First Last; your own name is filled in first.
         $this->assertStringContainsString('<option value="' . $otto . '" >Otto Ames</option>', $body);
         $this->assertStringContainsString('<option value="' . $this->playerId . '" selected>Nora Vote</option>', $body);

@@ -18,11 +18,11 @@ class ScoreModel extends Model
         'hole1', 'hole2', 'hole3', 'hole4', 'hole5', 'hole6', 'hole7', 'hole8', 'hole9',
         'hole10', 'hole11', 'hole12', 'hole13', 'hole14', 'hole15', 'hole16', 'hole17', 'hole18',
         'gross', 'handicap_used', 'net', 'place', 'winnings_cents', 'image', 'team_number',
-        'team_member1_id', 'team_member2_id', 'team_member3_id', 'team_member4_id',
+        'team_member1_id', 'team_member2_id', 'team_member3_id', 'team_member4_id', 'team_member5_id',
     ];
 
     // Team members a player can name for a team game.
-    public const TEAM_MEMBER_SLOTS = 4;
+    public const TEAM_MEMBER_SLOTS = 5;
 
     protected $validationRules = [
         'league_id'      => 'required|is_natural_no_zero',
