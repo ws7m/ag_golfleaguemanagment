@@ -9,10 +9,12 @@
 <?php if (! empty($filterValues['round_id'])): ?>
     <section class="panel" id="teams-from-groups">
         <h2>Teams = groups</h2>
-        <p class="muted">Sets every player's team number in this round to their group number, so teams start out as the groups
-            they tee off with. Players who aren't in a group are not changed. You can then change any player's team above.</p>
+        <p class="muted">Puts every player in this round who isn't on a team yet on a team with their group, so teams start out
+            as the groups they tee off with. Each group's team number is its group number, unless that number is already used
+            by a team (for example from Link Teams); then it gets the next free number. Players already on a team, and players
+            who aren't in a group, are not changed. You can then change any player's team above.</p>
         <form method="post" action="<?= site_url('admin/scores/teams-from-groups') ?>" class="form inline"
-              onsubmit="return confirm('Set every player\'s team in this round to their group number?')">
+              onsubmit="return confirm('Put every player who isn\'t on a team yet on a team with their group?')">
             <?= csrf_field() ?>
             <input type="hidden" name="round_id" value="<?= esc((string) $filterValues['round_id'], 'attr') ?>">
             <button type="submit">Teams = groups</button>

@@ -340,9 +340,12 @@ class Scores extends CrudController
     }
 
     /**
-     * Sets each score's team number to its group number, for the round
-     * shown, so teams start out as the groups players tee off with. Scores
-     * without a group are not changed.
+     * For the round shown, puts players who aren't on a team yet (team 0)
+     * on a team with the rest of their group, so teams start out as the
+     * groups players tee off with. Players already on a team (e.g. from
+     * Link Teams) keep their team, and their team numbers aren't reused:
+     * a group whose number is taken gets the next free number instead.
+     * Scores without a group are not changed.
      */
     public function teamsFromGroups()
     {
@@ -353,16 +356,58 @@ class Scores extends CrudController
         }
 
         $db     = db_connect();
-        $scores = $db->prefixTable('scores');
-        $groups = $db->prefixTable('league_groups');
-        $db->query(
-            "UPDATE {$scores} SET team_number = (SELECT g.group_number FROM {$groups} g WHERE g.id = {$scores}.group_id), updated_at = ?
-             WHERE round_id = ? AND group_id IS NOT NULL",
-            [date('Y-m-d H:i:s'), $roundId]
-        );
-        $count = $db->affectedRows();
+        $scores = $db->table('scores s')
+            ->select('s.id, s.team_number, g.group_number')
+            ->join('league_groups g', 'g.id = s.group_id', 'left')
+            ->where('s.round_id', $roundId)
+            ->orderBy('g.group_number')->orderBy('s.id')
+            ->get()->getResultArray();
 
-        return $back->with('message', trim("{$count} scores set to their group's number as their team. " . self::teamSizeWarnings([$roundId])));
+        // Team numbers already in use stay as they are.
+        $used = [];
+        foreach ($scores as $score) {
+            if ((int) $score['team_number'] > 0) {
+                $used[(int) $score['team_number']] = true;
+            }
+        }
+        $kept = count(array_filter($scores, static fn ($s) => (int) $s['team_number'] > 0));
+
+        // Each group gets its own number if it's free, else the next free one.
+        $teamFor = [];
+        $moved   = [];
+        $count   = 0;
+        $now     = date('Y-m-d H:i:s');
+        $db->transStart();
+        foreach ($scores as $score) {
+            if ((int) $score['team_number'] > 0 || $score['group_number'] === null) {
+                continue;
+            }
+            $group = (int) $score['group_number'];
+            if (! isset($teamFor[$group])) {
+                $team = $group;
+                while (isset($used[$team])) {
+                    $team++;
+                }
+                $teamFor[$group] = $team;
+                $used[$team]     = true;
+                if ($team !== $group) {
+                    $moved[] = "group {$group} is team {$team}";
+                }
+            }
+            $db->table('scores')->where('id', (int) $score['id'])->update(['team_number' => $teamFor[$group], 'updated_at' => $now]);
+            $count++;
+        }
+        $db->transComplete();
+
+        $message = "{$count} scores set to a team by group.";
+        if ($moved !== []) {
+            $message .= ' Numbers already in use were skipped, so ' . implode(', ', $moved) . '.';
+        }
+        if ($kept > 0) {
+            $message .= " {$kept} " . ($kept === 1 ? 'player was' : 'players were') . ' already on a team and kept it.';
+        }
+
+        return $back->with('message', trim($message . ' ' . self::teamSizeWarnings([$roundId])));
     }
 
     /**

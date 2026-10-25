@@ -681,7 +681,7 @@ final class AdminScreensTest extends CIUnitTestCase
         // Teams = groups: Ames and Baker become team 2, Cole team 5 (a team of one,
         // so a warning); Dunn has no group and is left at 0.
         $this->asAdmin()->post('admin/scores/teams-from-groups', ['round_id' => $roundId])
-            ->assertSessionHas('message', '3 scores set to their group\'s number as their team. Check teams: Team 5 has 1 player.');
+            ->assertSessionHas('message', '3 scores set to a team by group. Check teams: Team 5 has 1 player.');
         $this->seeInDatabase('scores', ['id' => $ids['Ames'], 'team_number' => 2]);
         $this->seeInDatabase('scores', ['id' => $ids['Baker'], 'team_number' => 2]);
         $this->seeInDatabase('scores', ['id' => $ids['Cole'], 'team_number' => 5]);
@@ -1099,7 +1099,7 @@ final class AdminScreensTest extends CIUnitTestCase
         $roundId = (new RoundModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-06-07', 'game_id' => $gameId, 'status' => 'active']);
 
         // Not a team game: no button.
-        $this->asAdmin()->get("admin/scores?round_id={$roundId}")->assertDontSee('Link Teams');
+        $this->assertStringNotContainsString('>Link Teams</button>', $this->asAdmin()->get("admin/scores?round_id={$roundId}")->response()->getBody());
         $db->table('games')->where('id', $gameId)->update(['team_game' => 1]);
         $ids = [];
         foreach (['Ames', 'Baker', 'Cole', 'Dunn', 'Eads', 'Ford', 'Gray'] as $last) {
@@ -1190,6 +1190,33 @@ final class AdminScreensTest extends CIUnitTestCase
         $db->table('scores')->where('team_number >', 0)->update(array_fill_keys(array_map(static fn ($h) => "hole{$h}", range(1, 18)), 0));
         $this->asAdmin()->post('admin/scores/map-team-scores', ['round_id' => $roundId])
             ->assertSessionHas('message', 'No team scores to map: no team in this round has entered a hole score yet.');
+    }
+
+    public function testTeamsFromGroupsKeepsLinkedTeamsAndSkipsTheirNumbers(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
+        $courseId = (new CourseModel())->insert(['name' => 'Course']);
+        $roundId  = (new RoundModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-05-03']);
+        $db       = db_connect();
+        $groups   = [];
+        foreach ([1, 2, 3] as $number) {
+            $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => $number, 'active' => 1]);
+            $groups[$number] = (int) $db->insertID();
+        }
+        $ids = [];
+        // Ames and Baker were already linked as teams 1 and 2. The others aren't on a team.
+        foreach ([['Ames', 1, 1], ['Baker', 1, 2], ['Cole', 1, 0], ['Dunn', 2, 0], ['Eads', 2, 0], ['Ford', 3, 0], ['Gray', null, 0]] as [$last, $group, $team]) {
+            $playerId = (new PlayerModel())->insert(['first_name' => 'Pat', 'last_name' => $last, 'league_id' => $leagueId]);
+            $db->table('scores')->insert(['league_id' => $leagueId, 'round_id' => $roundId, 'player_id' => $playerId,
+                'group_id' => $group === null ? null : $groups[$group], 'team_number' => $team]);
+            $ids[$last] = (int) $db->insertID();
+        }
+
+        $this->asAdmin()->post('admin/scores/teams-from-groups', ['round_id' => $roundId])
+            ->assertSessionHas('message', '4 scores set to a team by group. Numbers already in use were skipped, so group 1 is team 3, group 2 is team 4, group 3 is team 5.'
+                . ' 2 players were already on a team and kept it. Check teams: Team 1 has 1 player; Team 2 has 1 player; Team 3 has 1 player; Team 5 has 1 player.');
+        $team = static fn (string $last) => (int) $db->table('scores')->where('id', $ids[$last])->get()->getRow()->team_number;
+        $this->assertSame([1, 2, 3, 4, 4, 5, 0], array_map($team, ['Ames', 'Baker', 'Cole', 'Dunn', 'Eads', 'Ford', 'Gray']));
     }
 
     public function testAdminScoreEditPageHasTeamMembers(): void
