@@ -1313,6 +1313,32 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->seeInDatabase('scores', ['id' => $scoreId, 'team_member3_id' => null]);
     }
 
+    public function testAddTestPlayersHaveRandomNamesSexAndTees(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League', 'active' => 1]);
+        // An earlier test player, so numbering continues after player7.
+        (new PlayerModel())->insert(['first_name' => 'Old', 'last_name' => 'Tester', 'login' => 'player7', 'league_id' => $leagueId]);
+
+        $this->asAdmin()->post('admin/players/add-test', ['league_id' => $leagueId, 'count' => 40])
+            ->assertSessionHas('message', '40 test players added (logins player8 to player47). Each logs in with playerN / playerN.');
+
+        $added = (new PlayerModel())->where('league_id', $leagueId)->where('login !=', 'player7')->findAll();
+        $this->assertCount(40, $added);
+        $names = [];
+        foreach ($added as $player) {
+            $this->assertContains($player['gender'], ['M', 'F']);
+            $this->assertSame($player['gender'] === 'F' ? 'red' : 'white', $player['tee'], $player['first_name']);
+            $this->assertSame(8, (int) $player['handicap']);
+            $this->assertMatchesRegularExpression('/^[A-Z][a-z]+$/', $player['first_name']);
+            $this->assertMatchesRegularExpression('/^[A-Z][a-z]+$/', $player['last_name']);
+            $names[] = "{$player['first_name']} {$player['last_name']}";
+        }
+        $this->assertSame($names, array_unique($names), 'Each test player has a different name.');
+        // With 40 players, both men and women turn up (1 in 2^39 chance of not).
+        $this->assertCount(2, array_unique(array_column($added, 'gender')));
+        $this->assertNotNull((new PlayerModel())->verifyLogin('player8', 'player8'));
+    }
+
     public function testDeleteAllPlayersKeepsAdminsAndPlayersWithScores(): void
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'League']);
@@ -1349,13 +1375,12 @@ final class AdminScreensTest extends CIUnitTestCase
         $players  = new PlayerModel();
         $players->insert(['first_name' => '2', 'last_name' => 'Player2', 'login' => 'player2']);
 
-        // Numbering continues after the highest existing PlayerN.
+        // Numbering continues after the highest existing playerN login.
         $this->asAdmin()->post('admin/players/add-test', ['league_id' => $leagueId, 'count' => '3'])
-            ->assertSessionHas('message', '3 test players added (Player3 to Player5). Each logs in with playerN / playerN.');
+            ->assertSessionHas('message', '3 test players added (logins player3 to player5). Each logs in with playerN / playerN.');
 
-        $this->seeInDatabase('players', ['last_name' => 'Player3', 'first_name' => '3', 'login' => 'player3', 'league_id' => $leagueId, 'is_player' => 1,
-            'tee' => 'white', 'flight' => 2, 'handicap' => 10]);
-        $this->seeInDatabase('players', ['last_name' => 'Player5', 'first_name' => '5', 'login' => 'player5']);
+        $this->seeInDatabase('players', ['login' => 'player3', 'league_id' => $leagueId, 'is_player' => 1, 'flight' => 2, 'handicap' => 8]);
+        $this->seeInDatabase('players', ['login' => 'player5', 'handicap' => 8]);
         $this->assertNotNull($players->verifyLogin('player4', 'player4'));
 
         $this->asAdmin()->post('admin/players/add-test', ['league_id' => $leagueId, 'count' => '0'])->assertSessionHas('error');
@@ -1364,7 +1389,7 @@ final class AdminScreensTest extends CIUnitTestCase
         // 200 at once is allowed and quick.
         $start = microtime(true);
         $this->asAdmin()->post('admin/players/add-test', ['league_id' => $leagueId, 'count' => '200'])
-            ->assertSessionHas('message', '200 test players added (Player6 to Player205). Each logs in with playerN / playerN.');
+            ->assertSessionHas('message', '200 test players added (logins player6 to player205). Each logs in with playerN / playerN.');
         $this->assertLessThan(15, microtime(true) - $start, 'Adding 200 test players should be well within the 30s request limit');
         $this->assertNotNull($players->verifyLogin('player205', 'player205'));
     }

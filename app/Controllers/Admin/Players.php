@@ -206,10 +206,11 @@ class Players extends CrudController
     /**
      * TEMPORARY test data helper, to be removed later.
      *
-     * Adds a number of players named Player1 / 1, Player2 / 2, and so on,
-     * continuing after the highest PlayerN already saved. Each gets the login
-     * and password playerN, is registered in the chosen league, and plays
-     * from the white tees in flight 2 with a handicap of 10.
+     * Adds a number of players with random common first and last names, men
+     * and women. Men play from the white tees and women from the red tees,
+     * all in flight 2 with a handicap of 8. Each is registered in the chosen
+     * league and gets the login and password playerN, continuing after the
+     * highest playerN login already saved.
      */
     public function addTestPlayers()
     {
@@ -222,27 +223,31 @@ class Players extends CrudController
 
         $players = new PlayerModel();
         $highest = 0;
-        foreach ($players->like('last_name', 'Player', 'after')->findAll() as $player) {
-            if (preg_match('/^Player(\d+)$/', $player['last_name'], $m)) {
+        $taken   = [];
+        foreach ($players->findAll() as $player) {
+            if (preg_match('/^player(\d+)$/', (string) $player['login'], $m)) {
                 $highest = max($highest, (int) $m[1]);
             }
+            $taken[strtolower("{$player['first_name']} {$player['last_name']}")] = true;
         }
 
         $db = db_connect();
         $db->transStart();
         for ($n = $highest + 1; $n <= $highest + $count; $n++) {
+            [$first, $last, $gender] = self::randomTestName($taken);
             // Hashed once at low strength: a normal-strength hash takes ~0.2s,
             // too slow for 200 players in one request, and these are
             // throwaway test accounts. password_verify() works the same.
             $players->insert([
-                'first_name'    => (string) $n,
-                'last_name'     => "Player{$n}",
+                'first_name'    => $first,
+                'last_name'     => $last,
+                'gender'        => $gender,
                 'login'         => "player{$n}",
                 'password_hash' => password_hash("player{$n}", PASSWORD_BCRYPT, ['cost' => 4]),
                 'league_id'     => $leagueId,
-                'tee'           => 'white',
+                'tee'           => $gender === 'F' ? 'red' : 'white',
                 'flight'        => 2,
-                'handicap'      => 10,
+                'handicap'      => 8,
                 'is_player'     => 1,
                 'active'        => 1,
                 // Test accounts keep their playerN password.
@@ -251,7 +256,55 @@ class Players extends CrudController
         }
         $db->transComplete();
 
-        return $back->with('message', "{$count} test players added (Player" . ($highest + 1) . ' to Player' . ($highest + $count) . '). Each logs in with playerN / playerN.');
+        return $back->with('message', "{$count} test players added (logins player" . ($highest + 1) . ' to player' . ($highest + $count) . '). Each logs in with playerN / playerN.');
+    }
+
+    private const TEST_MEN = [
+        'James', 'John', 'Robert', 'Michael', 'William', 'David', 'Richard', 'Joseph', 'Thomas', 'Charles',
+        'Daniel', 'Matthew', 'Anthony', 'Mark', 'Donald', 'Steven', 'Paul', 'Andrew', 'Joshua', 'Kenneth',
+        'Kevin', 'Brian', 'George', 'Timothy', 'Ronald', 'Jason', 'Edward', 'Jeffrey', 'Ryan', 'Jacob',
+        'Gary', 'Eric', 'Stephen', 'Larry', 'Justin', 'Scott', 'Brandon', 'Frank', 'Gregory', 'Raymond',
+    ];
+
+    private const TEST_WOMEN = [
+        'Mary', 'Patricia', 'Jennifer', 'Linda', 'Elizabeth', 'Barbara', 'Susan', 'Jessica', 'Sarah', 'Karen',
+        'Lisa', 'Nancy', 'Betty', 'Sandra', 'Margaret', 'Ashley', 'Kimberly', 'Emily', 'Donna', 'Michelle',
+        'Carol', 'Amanda', 'Melissa', 'Deborah', 'Stephanie', 'Rebecca', 'Sharon', 'Laura', 'Cynthia', 'Amy',
+        'Kathleen', 'Angela', 'Shirley', 'Brenda', 'Emma', 'Anna', 'Pamela', 'Nicole', 'Samantha', 'Katherine',
+    ];
+
+    private const TEST_LAST_NAMES = [
+        'Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez',
+        'Hernandez', 'Lopez', 'Gonzalez', 'Wilson', 'Anderson', 'Thomas', 'Taylor', 'Moore', 'Jackson', 'Martin',
+        'Lee', 'Perez', 'Thompson', 'White', 'Harris', 'Sanchez', 'Clark', 'Ramirez', 'Lewis', 'Robinson',
+        'Walker', 'Young', 'Allen', 'King', 'Wright', 'Scott', 'Torres', 'Nguyen', 'Hill', 'Flores',
+        'Green', 'Adams', 'Nelson', 'Baker', 'Hall', 'Rivera', 'Campbell', 'Mitchell', 'Carter', 'Roberts',
+        'Turner', 'Phillips', 'Evans', 'Parker', 'Edwards', 'Collins', 'Stewart', 'Morris', 'Murphy', 'Cook',
+        'Rogers', 'Morgan', 'Peterson', 'Cooper', 'Reed', 'Bailey', 'Bell', 'Kelly', 'Howard', 'Ward',
+        'Cox', 'Richardson', 'Wood', 'Watson', 'Brooks', 'Bennett', 'Gray', 'James', 'Hughes', 'Price',
+    ];
+
+    /**
+     * A random man's or woman's name (about half each) that isn't already
+     * used, for a test player. Marks it as used.
+     *
+     * @param array<string, true> $taken "first last" in lower case
+     *
+     * @return array{string, string, string} first name, last name, gender (M/F)
+     */
+    private static function randomTestName(array &$taken): array
+    {
+        // 80 x 80 = 6,400 names, so a free one turns up quickly.
+        do {
+            $gender = random_int(0, 1) === 1 ? 'F' : 'M';
+            $firsts = $gender === 'F' ? self::TEST_WOMEN : self::TEST_MEN;
+            $first  = $firsts[random_int(0, count($firsts) - 1)];
+            $last   = self::TEST_LAST_NAMES[random_int(0, count(self::TEST_LAST_NAMES) - 1)];
+            $key    = strtolower("{$first} {$last}");
+        } while (isset($taken[$key]));
+        $taken[$key] = true;
+
+        return [$first, $last, $gender];
     }
 
     /**
