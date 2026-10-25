@@ -124,6 +124,7 @@ input[type="checkbox"] { width: 1.2rem; height: 1.2rem; }
 .has-error input, .has-error select, .has-error textarea { border-color: var(--danger); }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 0 0.75rem; }
+.grid.two { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
 
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin-top: 1rem; }
 .delete-form { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border); }

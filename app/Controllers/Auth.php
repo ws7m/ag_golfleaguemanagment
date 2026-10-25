@@ -98,10 +98,30 @@ class Auth extends BaseController
         $password = (string) $this->request->getPost('password');
         $confirm  = (string) $this->request->getPost('password_confirm');
 
-        $errors = [];
         // They just logged in with the starting password, so it isn't asked
         // for again on the first change.
-        if (! $forced && ! $players->passwordMatches($id, $current)) {
+        $errors = $this->passwordErrors($players, $player, $forced ? null : $current, $password, $confirm);
+
+        if ($errors !== []) {
+            return view('auth/password', ['title' => 'Change password', 'forced' => $forced, 'errors' => $errors]);
+        }
+
+        $players->setPassword($id, $password);
+
+        return redirect()->to(session('admin_id') ? 'admin' : 'player')->with('message', 'Your new password is saved.');
+    }
+
+    /**
+     * Problems with a new password, or [] if it can be saved. $current is
+     * checked against the saved password unless it is null.
+     *
+     * @return list<string>
+     */
+    private function passwordErrors(PlayerModel $players, array $player, ?string $current, string $password, string $confirm): array
+    {
+        $id     = (int) $player['id'];
+        $errors = [];
+        if ($current !== null && ! $players->passwordMatches($id, $current)) {
             $errors[] = 'Your current password is not correct.';
         }
         if (strlen($password) < self::MIN_PASSWORD_LENGTH) {
@@ -115,13 +135,75 @@ class Auth extends BaseController
             $errors[] = 'Choose a password that isn\'t your last name or login.';
         }
 
-        if ($errors !== []) {
-            return view('auth/password', ['title' => 'Change password', 'forced' => $forced, 'errors' => $errors]);
+        return $errors;
+    }
+
+    /** What a player can change about themselves on the Update Info page. */
+    private const INFO_FIELDS = [
+        'first_name', 'last_name', 'gender', 'email', 'phone', 'text_msg_ok', 'desired_tee_time', 'desired_group_members',
+    ];
+
+    /**
+     * The Update Info page: anyone logged in can change their own name,
+     * contact details, preferences and password.
+     */
+    public function infoForm()
+    {
+        $id = $this->accountId();
+        if ($id === null) {
+            return redirect()->to('login');
         }
 
-        $players->setPassword($id, $password);
+        return view('auth/info', ['title' => 'Update info', 'player' => (new PlayerModel())->find($id), 'errors' => []]);
+    }
 
-        return redirect()->to(session('admin_id') ? 'admin' : 'player')->with('message', 'Your new password is saved.');
+    public function saveInfo()
+    {
+        $id = $this->accountId();
+        if ($id === null) {
+            return redirect()->to('login');
+        }
+        $players = new PlayerModel();
+        $player  = $players->find($id);
+
+        $data = [];
+        foreach (self::INFO_FIELDS as $field) {
+            $value        = trim((string) $this->request->getPost($field));
+            $data[$field] = $value === '' ? null : $value;
+        }
+        $data['text_msg_ok'] = $this->request->getPost('text_msg_ok') ? 1 : 0;
+
+        $errors = [];
+        if (! $players->validate(['id' => $id] + $data)) {
+            $errors = array_values($players->errors());
+        }
+        // A new password is optional here; changing it needs the current one.
+        $password = (string) $this->request->getPost('password');
+        if ($password !== '') {
+            $errors = [...$errors, ...$this->passwordErrors(
+                $players, $player, (string) $this->request->getPost('current_password'), $password, (string) $this->request->getPost('password_confirm')
+            )];
+        }
+
+        if ($errors !== []) {
+            return view('auth/info', ['title' => 'Update info', 'player' => $data + $player, 'errors' => $errors]);
+        }
+
+        $players->skipValidation(true)->update($id, $data);
+        if ($password !== '') {
+            $players->setPassword($id, $password);
+        }
+
+        // Show the new name at the top of the page.
+        $name = "{$data['first_name']} {$data['last_name']}";
+        if (session('player_id')) {
+            session()->set('player_name', $name);
+        }
+        if (session('admin_id')) {
+            session()->set('admin_name', $name);
+        }
+
+        return redirect()->to('info')->with('message', $password !== '' ? 'Your information and new password are saved.' : 'Your information is saved.');
     }
 
     /**

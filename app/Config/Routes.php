@@ -11,6 +11,8 @@ $routes->post('login', 'Auth::login');
 $routes->get('admin/login', 'Auth::loginForm');
 $routes->get('logout', 'Auth::logout');
 $routes->get('password', 'Auth::passwordForm');
+$routes->get('info', 'Auth::infoForm');
+$routes->post('info', 'Auth::saveInfo');
 $routes->post('password', 'Auth::changePassword');
 
 $routes->group('player', ['filter' => 'playerauth', 'namespace' => 'App\Controllers\Player'], static function ($routes) {

@@ -288,4 +288,50 @@ final class PlayerHomeTest extends CIUnitTestCase
             ->assertSessionHas('error', "Team member 1 isn't a player in this league. Nothing was saved.");
         $this->seeInDatabase('scores', ['round_id' => $roundId, 'player_id' => $this->playerId, 'team_member2_id' => $otto]);
     }
+
+    public function testPlayerCanUpdateTheirInfo(): void
+    {
+        $players = new PlayerModel();
+        db_connect()->table('players')->where('id', $this->playerId)->update(['login' => 'voten', 'tee' => 'white', 'handicap' => 9]);
+        $players->setPassword($this->playerId, 'fairway-27');
+
+        // The link sits before Password at the top right.
+        $home = $this->asPlayer()->get('player')->response()->getBody();
+        $this->assertLessThan(strpos($home, '>Password</a>'), strpos($home, '>Update Info</a>'));
+
+        $page = $this->asPlayer()->get('info');
+        $page->assertOK();
+        $body = $page->response()->getBody();
+        foreach (['first_name', 'last_name', 'gender', 'email', 'phone', 'text_msg_ok', 'desired_tee_time', 'desired_group_members', 'password'] as $field) {
+            $this->assertStringContainsString("name=\"{$field}\"", $body);
+        }
+        // Not things only the admin sets.
+        foreach (['tee', 'handicap', 'flight', 'login', 'league_id'] as $field) {
+            $this->assertStringNotContainsString("name=\"{$field}\"", $body);
+        }
+
+        $form = [
+            'first_name' => 'Nora', 'last_name' => 'Voter', 'gender' => 'F', 'email' => 'nora@example.com', 'phone' => '970-555-1234',
+            'text_msg_ok' => '1', 'desired_tee_time' => '16:10', 'desired_group_members' => 'Jim Jones, Mary Smith',
+        ];
+        $this->asPlayer()->post('info', $form)->assertSessionHas('message', 'Your information is saved.');
+        $this->seeInDatabase('players', ['id' => $this->playerId, 'last_name' => 'Voter', 'gender' => 'F', 'email' => 'nora@example.com', 'text_msg_ok' => 1,
+            'desired_tee_time' => '16:10', 'desired_group_members' => 'Jim Jones, Mary Smith', 'login' => 'voten', 'tee' => 'white', 'handicap' => 9]);
+        $this->assertSame('Nora Voter', session('player_name'));
+        $this->assertNotNull($players->verifyLogin('voten', 'fairway-27'), 'The password is kept when left blank.');
+
+        // Unticking text messages, bad values, and password rules.
+        $this->asPlayer()->post('info', ['text_msg_ok' => ''] + $form);
+        $this->seeInDatabase('players', ['id' => $this->playerId, 'text_msg_ok' => 0]);
+        $this->asPlayer()->post('info', ['first_name' => '', 'email' => 'not-an-email'] + $form)->assertSee('flash-error');
+        $this->seeInDatabase('players', ['id' => $this->playerId, 'first_name' => 'Nora', 'email' => 'nora@example.com']);
+        $this->asPlayer()->post('info', ['password' => 'bunker-99x', 'password_confirm' => 'bunker-99x', 'current_password' => 'wrong'] + $form)
+            ->assertSee('current password is not correct');
+
+        $this->asPlayer()->post('info', ['password' => 'bunker-99x', 'password_confirm' => 'bunker-99x', 'current_password' => 'fairway-27'] + $form)
+            ->assertSessionHas('message', 'Your information and new password are saved.');
+        $this->assertNotNull($players->verifyLogin('voten', 'bunker-99x'));
+
+        $this->withSession([])->get('info')->assertRedirectTo('/login');
+    }
 }
