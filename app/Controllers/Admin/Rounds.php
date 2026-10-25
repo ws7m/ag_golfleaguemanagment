@@ -47,7 +47,7 @@ class Rounds extends CrudController
 
     protected function listFields(): array
     {
-        return ['top_vote' => ['label' => 'Most votes']];
+        return ['top_vote' => ['label' => 'Game votes']];
     }
 
     /**

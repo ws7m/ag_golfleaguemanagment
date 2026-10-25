@@ -1021,7 +1021,7 @@ final class AdminScreensTest extends CIUnitTestCase
         $html = $this->asAdmin()->get("admin/rounds?league_id={$leagueId}")->response()->getBody();
         $this->assertMatchesRegularExpression("#action=\"[^\"]*admin/rounds/{$roundId}/game\"[^>]*>.*?<select name=\"value\"[^>]*onchange=\"this.form.submit\(\)\"#s", $html);
         $this->assertStringContainsString('<option value="" selected>—</option>', $html);
-        $this->assertStringContainsString('<th>Most votes</th>', $html);
+        $this->assertStringContainsString('<th>Game votes</th>', $html);
 
         $this->asAdmin()->post("admin/rounds/{$roundId}/game", ['value' => (string) $games['Skins']])
             ->assertSessionHas('message', '2027-05-03 Round 1 game is now Skins.');
