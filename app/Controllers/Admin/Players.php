@@ -209,8 +209,9 @@ class Players extends CrudController
      * Adds a number of players with random common first and last names, men
      * and women. Men play from the white tees and women from the red tees,
      * all in flight 2 with a handicap of 8. Each is registered in the chosen
-     * league and gets the login and password playerN, continuing after the
-     * highest playerN login already saved.
+     * league. The login is the first initial and last name (Jim Jones is
+     * jjones; jjones2 if that's taken) and the password is the login plus
+     * 12345 (jjones12345), which test players don't have to change.
      */
     public function addTestPlayers()
     {
@@ -222,19 +223,25 @@ class Players extends CrudController
         }
 
         $players = new PlayerModel();
-        $highest = 0;
         $taken   = [];
+        $logins  = [];
         foreach ($players->findAll() as $player) {
-            if (preg_match('/^player(\d+)$/', (string) $player['login'], $m)) {
-                $highest = max($highest, (int) $m[1]);
-            }
             $taken[strtolower("{$player['first_name']} {$player['last_name']}")] = true;
+            $logins[(string) $player['login']]                                    = true;
         }
 
-        $db = db_connect();
+        $db    = db_connect();
+        $added = [];
         $db->transStart();
-        for ($n = $highest + 1; $n <= $highest + $count; $n++) {
+        for ($n = 1; $n <= $count; $n++) {
             [$first, $last, $gender] = self::randomTestName($taken);
+            $base  = strtolower($first[0] . $last);
+            $login = $base;
+            for ($i = 2; isset($logins[$login]); $i++) {
+                $login = $base . $i;
+            }
+            $logins[$login] = true;
+            $added[]        = $login;
             // Hashed once at low strength: a normal-strength hash takes ~0.2s,
             // too slow for 200 players in one request, and these are
             // throwaway test accounts. password_verify() works the same.
@@ -242,21 +249,24 @@ class Players extends CrudController
                 'first_name'    => $first,
                 'last_name'     => $last,
                 'gender'        => $gender,
-                'login'         => "player{$n}",
-                'password_hash' => password_hash("player{$n}", PASSWORD_BCRYPT, ['cost' => 4]),
+                'login'         => $login,
+                'password_hash' => password_hash($login . '12345', PASSWORD_BCRYPT, ['cost' => 4]),
                 'league_id'     => $leagueId,
                 'tee'           => $gender === 'F' ? 'red' : 'white',
                 'flight'        => 2,
                 'handicap'      => 8,
                 'is_player'     => 1,
                 'active'        => 1,
-                // Test accounts keep their playerN password.
+                // Test accounts keep their starting password.
                 'must_change_password' => 0,
             ]);
         }
         $db->transComplete();
 
-        return $back->with('message', "{$count} test players added (logins player" . ($highest + 1) . ' to player' . ($highest + $count) . '). Each logs in with playerN / playerN.');
+        $examples = implode(', ', array_slice($added, 0, 3)) . ($count > 3 ? ', …' : '');
+
+        return $back->with('message', "{$count} test players added ({$examples}). Each logs in with their login"
+            . ' (first initial and last name) and the password login + 12345, e.g. ' . $added[0] . ' / ' . $added[0] . '12345.');
     }
 
     private const TEST_MEN = [

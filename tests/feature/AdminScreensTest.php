@@ -1316,13 +1316,14 @@ final class AdminScreensTest extends CIUnitTestCase
     public function testAddTestPlayersHaveRandomNamesSexAndTees(): void
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'League', 'active' => 1]);
-        // An earlier test player, so numbering continues after player7.
         (new PlayerModel())->insert(['first_name' => 'Old', 'last_name' => 'Tester', 'login' => 'player7', 'league_id' => $leagueId]);
 
-        $this->asAdmin()->post('admin/players/add-test', ['league_id' => $leagueId, 'count' => 40])
-            ->assertSessionHas('message', '40 test players added (logins player8 to player47). Each logs in with playerN / playerN.');
+        // Someone already has the login a test player named Jim Jones would get.
+        (new PlayerModel())->insert(['first_name' => 'Jill', 'last_name' => 'Jonas', 'login' => 'jjones', 'league_id' => $leagueId]);
 
-        $added = (new PlayerModel())->where('league_id', $leagueId)->where('login !=', 'player7')->findAll();
+        $this->asAdmin()->post('admin/players/add-test', ['league_id' => $leagueId, 'count' => 40])->assertSessionHas('message');
+
+        $added = (new PlayerModel())->where('league_id', $leagueId)->whereNotIn('login', ['player7', 'jjones'])->findAll();
         $this->assertCount(40, $added);
         $names = [];
         foreach ($added as $player) {
@@ -1332,11 +1333,20 @@ final class AdminScreensTest extends CIUnitTestCase
             $this->assertMatchesRegularExpression('/^[A-Z][a-z]+$/', $player['first_name']);
             $this->assertMatchesRegularExpression('/^[A-Z][a-z]+$/', $player['last_name']);
             $names[] = "{$player['first_name']} {$player['last_name']}";
+
+            // Login: first initial and last name (a number added if taken);
+            // password: the login plus 12345, with no change needed.
+            $base = strtolower($player['first_name'][0] . $player['last_name']);
+            $this->assertMatchesRegularExpression('/^' . $base . '\\d*$/', $player['login']);
+            $this->assertNotSame('jjones', $player['login']);
+            $this->assertSame(0, (int) $player['must_change_password']);
         }
         $this->assertSame($names, array_unique($names), 'Each test player has a different name.');
         // With 40 players, both men and women turn up (1 in 2^39 chance of not).
         $this->assertCount(2, array_unique(array_column($added, 'gender')));
-        $this->assertNotNull((new PlayerModel())->verifyLogin('player8', 'player8'));
+        $login = $added[0]['login'];
+        $this->assertNotNull((new PlayerModel())->verifyLogin($login, $login . '12345'));
+        $this->post('login', ['login' => $login, 'password' => $login . '12345'])->assertRedirectTo('/player');
     }
 
     public function testDeleteAllPlayersKeepsAdminsAndPlayersWithScores(): void
@@ -1373,25 +1383,20 @@ final class AdminScreensTest extends CIUnitTestCase
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'League']);
         $players  = new PlayerModel();
-        $players->insert(['first_name' => '2', 'last_name' => 'Player2', 'login' => 'player2']);
 
-        // Numbering continues after the highest existing playerN login.
-        $this->asAdmin()->post('admin/players/add-test', ['league_id' => $leagueId, 'count' => '3'])
-            ->assertSessionHas('message', '3 test players added (logins player3 to player5). Each logs in with playerN / playerN.');
-
-        $this->seeInDatabase('players', ['login' => 'player3', 'league_id' => $leagueId, 'is_player' => 1, 'flight' => 2, 'handicap' => 8]);
-        $this->seeInDatabase('players', ['login' => 'player5', 'handicap' => 8]);
-        $this->assertNotNull($players->verifyLogin('player4', 'player4'));
+        $result = $this->asAdmin()->post('admin/players/add-test', ['league_id' => $leagueId, 'count' => '3']);
+        $result->assertSessionHas('message');
+        $this->assertMatchesRegularExpression('/^3 test players added \([a-z]+, [a-z]+, [a-z]+\)\. Each logs in with their login/', session('message'));
+        $this->assertSame(3, $players->where('league_id', $leagueId)->where('is_player', 1)->where('flight', 2)->where('handicap', 8)->countAllResults());
 
         $this->asAdmin()->post('admin/players/add-test', ['league_id' => $leagueId, 'count' => '0'])->assertSessionHas('error');
         $this->asAdmin()->post('admin/players/add-test', ['league_id' => $leagueId, 'count' => '201'])->assertSessionHas('error');
 
         // 200 at once is allowed and quick.
         $start = microtime(true);
-        $this->asAdmin()->post('admin/players/add-test', ['league_id' => $leagueId, 'count' => '200'])
-            ->assertSessionHas('message', '200 test players added (logins player6 to player205). Each logs in with playerN / playerN.');
+        $this->asAdmin()->post('admin/players/add-test', ['league_id' => $leagueId, 'count' => '200'])->assertSessionHas('message');
         $this->assertLessThan(15, microtime(true) - $start, 'Adding 200 test players should be well within the 30s request limit');
-        $this->assertNotNull($players->verifyLogin('player205', 'player205'));
+        $this->assertSame(203, $players->where('league_id', $leagueId)->countAllResults());
     }
 
     public function testDeleteAllScoresForOneRoundOrAWholeLeague(): void

@@ -2,8 +2,9 @@
 <section class="panel" id="add-test-players">
     <h2>Add test players <span class="muted">(temporary)</span></h2>
     <p class="muted">Adds players with random common names, men and women. Men play from the white tees and women from the red
-        tees, all in flight 2 with a handicap of 8. Each logs in with <strong>playerN</strong> and password <strong>playerN</strong>
-        (e.g. player3 / player3), continuing after the highest playerN login already saved.</p>
+        tees, all in flight 2 with a handicap of 8. The login is the first initial and last name (Jim Jones is <strong>jjones</strong>,
+        or jjones2 if that's taken) and the password is the login plus 12345 (<strong>jjones12345</strong>). Test players don't have
+        to change their password when they log in.</p>
     <form method="post" action="<?= site_url('admin/players/add-test') ?>" class="form inline"
           onsubmit="return confirm('Add ' + this.count.value + ' test players?')">
         <?= csrf_field() ?>
