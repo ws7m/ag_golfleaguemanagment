@@ -35,6 +35,8 @@ class Scores extends CrudController
         'player_id'                                   => 'ASC',
     ];
     protected ?string $extraIndexView = 'admin/scores/tools';
+    // "Link Teams", for a round with a team game.
+    protected ?string $belowFiltersView = 'admin/scores/link_teams';
     protected array $headActions      = ['Delete all scores' => '#delete-scores'];
 
     protected function fields(): array
@@ -179,6 +181,93 @@ class Scores extends CrudController
         }
 
         return $back->with('message', trim("{$saved} scores saved. {$warnings}"));
+    }
+
+    /**
+     * Sets team numbers for a round from the team members players chose on
+     * their score entry page. A player and everyone they named (who has a
+     * score in the round) are one team, and teams that share a player are
+     * joined. Teams are numbered 1, 2, ... in the order players entered;
+     * players with no team members, whom nobody named, are set to 0
+     * (individual). Warns about odd team sizes and named players who have
+     * no score in the round.
+     */
+    public function linkTeams()
+    {
+        $roundId = (int) $this->request->getPost('round_id');
+        $back    = redirect()->to(site_url($this->baseRoute . "?round_id={$roundId}"));
+        $round   = $roundId > 0 ? (new RoundModel())->find($roundId) : null;
+        if ($round === null) {
+            return $back->with('error', 'Choose a round first.');
+        }
+
+        $db     = db_connect();
+        $scores = $db->table('scores')->where('round_id', $roundId)->orderBy('id')->get()->getResultArray();
+        $names  = Lookup::playerNames();
+
+        // Join players into teams (union-find on player ids).
+        $parent = [];
+        foreach ($scores as $score) {
+            $parent[(int) $score['player_id']] = (int) $score['player_id'];
+        }
+        $find = static function (int $id) use (&$parent): int {
+            while ($parent[$id] !== $id) {
+                $id = $parent[$id] = $parent[$parent[$id]];
+            }
+
+            return $id;
+        };
+        $linked  = [];
+        $missing = [];
+        foreach ($scores as $score) {
+            $playerId = (int) $score['player_id'];
+            for ($i = 1; $i <= ScoreModel::TEAM_MEMBER_SLOTS; $i++) {
+                $memberId = (int) ($score["team_member{$i}_id"] ?? 0);
+                if ($memberId === 0 || $memberId === $playerId) {
+                    continue;
+                }
+                if (! isset($parent[$memberId])) {
+                    $missing[] = ($names[$playerId] ?? "Player {$playerId}") . ' named ' . ($names[$memberId] ?? "player {$memberId}");
+
+                    continue;
+                }
+                $parent[$find($memberId)] = $find($playerId);
+                $linked[$playerId]        = $linked[$memberId] = true;
+            }
+        }
+
+        // Number the teams in the order their first player was entered.
+        $numbers = [];
+        $teamOf  = [];
+        foreach ($scores as $score) {
+            $playerId = (int) $score['player_id'];
+            if (isset($linked[$playerId])) {
+                $teamOf[$playerId] = $numbers[$find($playerId)] ??= count($numbers) + 1;
+            } else {
+                $teamOf[$playerId] = 0;
+            }
+        }
+
+        $now = date('Y-m-d H:i:s');
+        $db->transStart();
+        foreach ($teamOf as $playerId => $team) {
+            $db->table('scores')->where(['round_id' => $roundId, 'player_id' => $playerId])
+                ->update(['team_number' => $team, 'updated_at' => $now]);
+        }
+        $db->transComplete();
+
+        $teams   = count($numbers);
+        $inTeams = count(array_filter($teamOf));
+        $message = "Linked {$teams} " . ($teams === 1 ? 'team' : 'teams') . " ({$inTeams} players) from the team members players chose.";
+        $alone   = count($teamOf) - $inTeams;
+        if ($alone > 0) {
+            $message .= " {$alone} " . ($alone === 1 ? 'player has' : 'players have') . ' no team members and ' . ($alone === 1 ? 'was' : 'were') . ' set to individual (team 0).';
+        }
+        if ($missing !== []) {
+            $message .= ' Not linked, because they have no score in this round: ' . implode('; ', $missing) . '.';
+        }
+
+        return $back->with('message', trim($message . ' ' . self::teamSizeWarnings([$roundId])));
     }
 
     /**

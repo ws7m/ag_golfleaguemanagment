@@ -142,6 +142,7 @@ class Home extends BaseController
         $tee   = in_array($player['tee'] ?? '', ['blue', 'white', 'red'], true) ? $player['tee'] : 'white';
         $holes = db_connect()->table('holes')->select("number, {$tee}_par AS par")
             ->where('course_id', $round['course_id'])->get()->getResultArray();
+        $game  = $this->roundGame($round);
 
         return view('player/score', [
             'title'  => 'Enter scores',
@@ -151,7 +152,8 @@ class Home extends BaseController
             'holes'  => ScoreModel::holesForNine($nine),
             'pars'   => array_column($holes, 'par', 'number'),
             'course' => db_connect()->table('courses')->where('id', $round['course_id'])->get()->getRowArray()['name'] ?? '',
-            'game'   => $round['game_id'] ? db_connect()->table('games')->where('id', $round['game_id'])->get()->getRowArray() : null,
+            'game'   => $game,
+            'teamPlayers' => ! empty($game['team_game']) ? $this->teamChoices((int) $round['league_id']) : [],
         ]);
     }
 
@@ -169,6 +171,10 @@ class Home extends BaseController
             return $back->with('error', 'Your score for this round is locked. Ask the league admin to change it.');
         }
         [$changes, $error] = ScoreModel::holeChanges($score, (array) ($this->request->getPost('holes') ?? []));
+        if ($error === null && ! empty($this->roundGame($round)['team_game'])) {
+            [$members, $error] = $this->teamMembers((array) ($this->request->getPost('team_members') ?? []), (int) $round['league_id']);
+            $changes += $members;
+        }
         if ($error !== null) {
             return $back->withInput()->with('error', $error . ' Nothing was saved.');
         }
@@ -188,6 +194,62 @@ class Home extends BaseController
             : "Scores saved. Gross {$changes['gross']}" . ($changes['net'] !== null ? ", net {$changes['net']}." : '.');
 
         return $back->with('message', $message);
+    }
+
+    private function roundGame(array $round): ?array
+    {
+        return $round['game_id'] ? db_connect()->table('games')->where('id', $round['game_id'])->get()->getRowArray() : null;
+    }
+
+    /**
+     * Players who can be named as team members: the league's active
+     * players, id => "First Last".
+     *
+     * @return array<int, string>
+     */
+    private function teamChoices(int $leagueId): array
+    {
+        $rows = (new PlayerModel())
+            ->where(['league_id' => $leagueId, 'is_player' => 1, 'active' => 1])
+            ->orderBy('first_name')->orderBy('last_name')
+            ->findAll();
+        $choices = [];
+        foreach ($rows as $row) {
+            $choices[(int) $row['id']] = trim("{$row['first_name']} {$row['last_name']}");
+        }
+
+        return $choices;
+    }
+
+    /**
+     * The team member boxes as score fields (blank = none), or an error if a
+     * player isn't one of the choices or is named twice.
+     *
+     * @return array{0: array<string, ?int>, 1: ?string}
+     */
+    private function teamMembers(array $posted, int $leagueId): array
+    {
+        $choices = $this->teamChoices($leagueId);
+        $fields  = [];
+        $seen    = [];
+        for ($i = 1; $i <= ScoreModel::TEAM_MEMBER_SLOTS; $i++) {
+            $id = (int) ($posted[$i] ?? 0);
+            if ($id === 0) {
+                $fields["team_member{$i}_id"] = null;
+
+                continue;
+            }
+            if (! isset($choices[$id])) {
+                return [[], "Team member {$i} isn't a player in this league."];
+            }
+            if (isset($seen[$id])) {
+                return [[], "{$choices[$id]} is chosen more than once as a team member."];
+            }
+            $seen[$id]                    = true;
+            $fields["team_member{$i}_id"] = $id;
+        }
+
+        return [$fields, null];
     }
 
     /**

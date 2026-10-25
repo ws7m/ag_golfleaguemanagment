@@ -18,7 +18,11 @@ class ScoreModel extends Model
         'hole1', 'hole2', 'hole3', 'hole4', 'hole5', 'hole6', 'hole7', 'hole8', 'hole9',
         'hole10', 'hole11', 'hole12', 'hole13', 'hole14', 'hole15', 'hole16', 'hole17', 'hole18',
         'gross', 'handicap_used', 'net', 'place', 'winnings_cents', 'image', 'team_number',
+        'team_member1_id', 'team_member2_id', 'team_member3_id', 'team_member4_id',
     ];
+
+    // Team members a player can name for a team game.
+    public const TEAM_MEMBER_SLOTS = 4;
 
     protected $validationRules = [
         'league_id'      => 'required|is_natural_no_zero',
@@ -44,6 +48,9 @@ class ScoreModel extends Model
 
         // A hole score is 1 to 20 strokes. 0 or blank means not entered yet
         // (activating a round creates score records with every hole at 0).
+        for ($i = 1; $i <= self::TEAM_MEMBER_SLOTS; $i++) {
+            $this->validationRules["team_member{$i}_id"] = 'permit_empty|is_natural_no_zero';
+        }
         for ($i = 1; $i <= 18; $i++) {
             $this->validationRules["hole{$i}"] = 'permit_empty|integer|greater_than_equal_to[0]|less_than_equal_to[20]';
         }

@@ -59,6 +59,9 @@ abstract class CrudController extends BaseController
      */
     protected array $orderBy = ['id' => 'ASC'];
 
+    /** Extra view shown between the list filters and the list */
+    protected ?string $belowFiltersView = null;
+
     /** Extra view shown under the list (e.g. the tee time shift form) */
     protected ?string $extraIndexView = null;
 
@@ -173,6 +176,7 @@ abstract class CrudController extends BaseController
             'rows'           => $this->listRows($model->findAll(), $active),
             'filterValues'   => $active,
             'extraIndexView' => $this->extraIndexView,
+            'belowFiltersView' => $this->belowFiltersView,
         ]));
     }
 

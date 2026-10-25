@@ -167,6 +167,10 @@ table.score-entry .hole-cell { width: 1.75rem; font-size: 1rem; padding: 0.35rem
     table.score-entry .hole-cell { width: 2.4rem; }
 }
 .score-totals { margin: 0.75rem 0 0; }
+.team-note { font-weight: 600; }
+.team-members { margin: 1rem 0 0; padding: 0.75rem 1rem 0; border: 1px solid var(--border); border-radius: var(--radius); }
+.team-members legend { font-weight: 600; padding: 0 0.25rem; }
+.team-members .grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
 .hole-cell::placeholder { color: var(--muted); opacity: 0.5; }
 /* A form button that looks like the links next to it. */
 .link-button { padding: 0; background: none; border: 0; color: var(--accent); font: inherit; font-weight: 400; text-decoration: underline; cursor: pointer; }

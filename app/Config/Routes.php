@@ -54,6 +54,7 @@ $routes->group('admin', ['filter' => 'adminauth', 'namespace' => 'App\Controller
     $routes->post('scores/delete-all', 'Scores::deleteAll');
     $routes->post('scores/save', 'Scores::saveScores');
     $routes->post('scores/teams-from-groups', 'Scores::teamsFromGroups');
+    $routes->post('scores/link-teams', 'Scores::linkTeams');
     $routes->post('scores/(:num)/toggle/(:segment)', 'Scores::toggle/$1/$2');
     $routes->post('rounds/generate', 'Rounds::generate');
     $routes->post('rounds/delete-all', 'Rounds::deleteAll');

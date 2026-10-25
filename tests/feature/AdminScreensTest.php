@@ -1089,6 +1089,53 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->assertStringNotContainsString('Baker, Bob', $html);
     }
 
+    public function testLinkTeamsFromChosenTeamMembers(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League', 'active' => 1]);
+        $courseId = (new CourseModel())->insert(['name' => 'Course']);
+        $db       = db_connect();
+        $db->table('games')->insert(['league_id' => $leagueId, 'name' => 'Skins', 'team_game' => 0]);
+        $gameId  = (int) $db->insertID();
+        $roundId = (new RoundModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-06-07', 'game_id' => $gameId, 'status' => 'active']);
+
+        // Not a team game: no button.
+        $this->asAdmin()->get("admin/scores?round_id={$roundId}")->assertDontSee('Link Teams');
+        $db->table('games')->where('id', $gameId)->update(['team_game' => 1]);
+        $ids = [];
+        foreach (['Ames', 'Baker', 'Cole', 'Dunn', 'Eads', 'Ford', 'Gray'] as $last) {
+            $ids[$last] = (int) (new PlayerModel())->insert(['first_name' => 'Pat', 'last_name' => $last, 'league_id' => $leagueId]);
+        }
+        $outside = (int) (new PlayerModel())->insert(['first_name' => 'Hal', 'last_name' => 'Hill', 'league_id' => $leagueId]);
+        $score = static fn (string $last, array $members = [], int $team = 9) => [
+            'league_id' => $leagueId, 'round_id' => $roundId, 'player_id' => $ids[$last], 'team_number' => $team,
+            'team_member1_id' => $members[0] ?? null, 'team_member2_id' => $members[1] ?? null,
+            'team_member3_id' => $members[2] ?? null, 'team_member4_id' => $members[3] ?? null,
+        ];
+        $db->table('scores')->insertBatch([
+            // Ames named Baker; Cole named Baker too, so all three are one team.
+            $score('Ames', [$ids['Ames'], $ids['Baker']]),
+            $score('Baker'),
+            $score('Cole', [$ids['Baker']]),
+            // Dunn and Eads named each other.
+            $score('Dunn', [$ids['Dunn'], $ids['Eads']]),
+            $score('Eads', [$ids['Dunn'], $ids['Eads']]),
+            // Ford named only Hill, who isn't in this round; Gray named nobody.
+            $score('Ford', [$outside]),
+            $score('Gray'),
+        ]);
+        $html = $this->asAdmin()->get("admin/scores?round_id={$roundId}")->response()->getBody();
+        $this->assertStringContainsString('Link Teams', $html);
+        $this->assertLessThan(strpos($html, '<table'), strpos($html, 'Link Teams'));
+
+        $this->asAdmin()->post('admin/scores/link-teams', ['round_id' => $roundId])
+            ->assertSessionHas('message', 'Linked 2 teams (5 players) from the team members players chose. 2 players have no team members and were set to individual (team 0).'
+                . ' Not linked, because they have no score in this round: Ford, Pat named Hill, Hal.');
+        $team = static fn (string $last) => (int) $db->table('scores')->where('player_id', $ids[$last])->get()->getRow()->team_number;
+        $this->assertSame([1, 1, 1, 2, 2, 0, 0], array_map($team, ['Ames', 'Baker', 'Cole', 'Dunn', 'Eads', 'Ford', 'Gray']));
+
+        $this->asAdmin()->post('admin/scores/link-teams', ['round_id' => 999])->assertSessionHas('error', 'Choose a round first.');
+    }
+
     public function testDeleteAllPlayersKeepsAdminsAndPlayersWithScores(): void
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'League']);

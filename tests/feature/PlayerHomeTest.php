@@ -245,4 +245,46 @@ final class PlayerHomeTest extends CIUnitTestCase
         $this->dontSeeInDatabase('scores', ['round_id' => $first, 'player_id' => $this->playerId]);
         $this->asPlayer()->get("player/score/{$scheduled}")->assertRedirectTo('/player');
     }
+
+    public function testTeamMembersOnScoreEntryForTeamGames(): void
+    {
+        $db = db_connect();
+        $db->table('courses')->insert(['name' => 'Home Course']);
+        $courseId = (int) $db->insertID();
+        $db->table('games')->insert(['league_id' => $this->leagueId, 'name' => 'Skins', 'team_game' => 0]);
+        $skins = (int) $db->insertID();
+        $db->table('rounds')->insert(['league_id' => $this->leagueId, 'course_id' => $courseId, 'game_id' => $skins, 'round_date' => '2099-06-07', 'name' => 'Round 1', 'status' => 'active']);
+        $roundId = (int) $db->insertID();
+        $players = new PlayerModel();
+        $otto    = (int) $players->insert(['first_name' => 'Otto', 'last_name' => 'Ames', 'league_id' => $this->leagueId]);
+        $other   = (int) (new \App\Models\LeagueModel())->insert(['name' => 'Other']);
+        $outsider = (int) $players->insert(['first_name' => 'Ed', 'last_name' => 'Eads', 'league_id' => $other]);
+
+        // Not a team game: no team boxes or note.
+        $body = $this->asPlayer()->get("player/score/{$roundId}")->response()->getBody();
+        $this->assertStringNotContainsString('team_members[1]', $body);
+        $this->assertStringNotContainsString('All team members should enter', $body);
+
+        $db->table('games')->where('id', $skins)->update(['team_game' => 1]);
+        $body = $this->asPlayer()->get("player/score/{$roundId}")->response()->getBody();
+        $this->assertStringContainsString('All team members should enter the same score on every hole for team games.', $body);
+        $this->assertLessThan(strpos($body, 'All team members'), strpos($body, 'Game: <strong>Skins'));
+        $this->assertSame(4, substr_count($body, 'name="team_members['));
+        // Players are listed First Last; your own name is filled in first.
+        $this->assertStringContainsString('<option value="' . $otto . '" >Otto Ames</option>', $body);
+        $this->assertStringContainsString('<option value="' . $this->playerId . '" selected>Nora Vote</option>', $body);
+        $this->assertStringNotContainsString('Ed Eads', $body);
+
+        $holes = ['hole1' => '4'];
+        $this->asPlayer()->post("player/score/{$roundId}", ['holes' => $holes, 'team_members' => [1 => $this->playerId, 2 => $otto, 3 => '', 4 => '']])
+            ->assertSessionHas('message');
+        $this->seeInDatabase('scores', ['round_id' => $roundId, 'player_id' => $this->playerId, 'team_member1_id' => $this->playerId, 'team_member2_id' => $otto, 'team_member3_id' => null, 'hole1' => 4]);
+
+        // Someone twice, or from another league, is refused.
+        $this->asPlayer()->post("player/score/{$roundId}", ['holes' => $holes, 'team_members' => [1 => $otto, 2 => $otto]])
+            ->assertSessionHas('error', 'Otto Ames is chosen more than once as a team member. Nothing was saved.');
+        $this->asPlayer()->post("player/score/{$roundId}", ['holes' => $holes, 'team_members' => [1 => $outsider]])
+            ->assertSessionHas('error', "Team member 1 isn't a player in this league. Nothing was saved.");
+        $this->seeInDatabase('scores', ['round_id' => $roundId, 'player_id' => $this->playerId, 'team_member2_id' => $otto]);
+    }
 }

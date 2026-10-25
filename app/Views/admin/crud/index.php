@@ -33,6 +33,10 @@
     </form>
 <?php endif ?>
 
+<?php if ($belowFiltersView): ?>
+    <?= view($belowFiltersView, ['filterValues' => $filterValues]) ?>
+<?php endif ?>
+
 <?php if ($rows === []): ?>
     <p class="muted">No <?= esc(strtolower($title)) ?> yet.</p>
 <?php else: ?>
