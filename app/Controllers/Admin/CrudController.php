@@ -22,6 +22,7 @@ use CodeIgniter\Model;
  *   default   Value for a new record; 'currentLeague' uses the current league
  *   help      Hint shown under the input
  *   readonly  Shown on the form but never saved from it (e.g. last login)
+ *   generate  For password: a button that fills in a random password
  *   compact   Lay out with neighbouring fields of the same compact group in a
  *             grid (true, or a group name such as 'holes')
  *

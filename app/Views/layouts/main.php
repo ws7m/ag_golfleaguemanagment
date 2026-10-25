@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= isset($title) && $title !== APP_NAME ? esc($title) . ' · ' : '' ?><?= esc(APP_NAME) ?></title>
     <link rel="stylesheet" href="<?= base_url('css/app.css') ?>">
+    <script src="<?= base_url('js/passwords.js') ?>" defer></script>
 </head>
 <body>
 <header class="site-header">

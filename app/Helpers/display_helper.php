@@ -105,7 +105,9 @@ if (! function_exists('field_input')) {
                 return '<input type="number" id="' . $id . '" name="' . esc($name, 'attr') . '" step="0.01" min="0" inputmode="decimal" value="' . esc((string) $dollars, 'attr') . '"' . $req . '>';
 
             case 'password':
-                return '<input type="password" id="' . $id . '" name="' . esc($name, 'attr') . '" autocomplete="new-password">';
+                // generate: a "Generate" button fills in a random password (public/js/passwords.js).
+                return '<input type="password" id="' . $id . '" name="' . esc($name, 'attr') . '" autocomplete="new-password"'
+                    . (empty($field['generate']) ? '' : ' data-generate') . '>';
 
             case 'decimal':
                 return '<input type="number" id="' . $id . '" name="' . esc($name, 'attr') . '" step="0.1" inputmode="decimal" value="' . esc((string) $value, 'attr') . '"' . $req . '>';

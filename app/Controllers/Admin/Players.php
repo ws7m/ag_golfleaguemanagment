@@ -105,7 +105,7 @@ class Players extends CrudController
             'first_name'            => ['label' => 'First name', 'listLabel' => 'First', 'required' => true],
             'last_name'             => ['label' => 'Last name', 'listLabel' => 'Last', 'required' => true],
             'login'                 => ['label' => 'Login', 'help' => 'Leave blank to set it from the last name and first initial, e.g. Mark Holbrook → holbrm.'],
-            'password'              => ['label' => 'Password', 'type' => 'password', 'help' => 'At least 8 characters. Leave blank to keep the current password. A new player left blank starts with their last name in lower case, e.g. holbrook.'],
+            'password'              => ['label' => 'Password', 'type' => 'password', 'generate' => true, 'help' => 'At least 8 characters. Leave blank to keep the current password. A new player left blank starts with their last name in lower case, e.g. holbrook.'],
             'member_number'         => ['label' => 'Member number', 'type' => 'number', 'help' => 'Leave blank to assign a random 3-digit number (100–999).'],
             'league_id'             => ['label' => 'League', 'type' => 'select', 'options' => 'leagues', 'default' => 'currentLeague', 'help' => 'The league the player is registered in.'],
             'gender'                => ['label' => 'Male or female', 'type' => 'select', 'options' => ['M' => 'Male', 'F' => 'Female']],

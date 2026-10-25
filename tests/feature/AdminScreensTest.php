@@ -1266,6 +1266,21 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->withSession([])->get('password')->assertRedirectTo('/login');
     }
 
+    public function testPasswordBoxesGetGenerateButtons(): void
+    {
+        // public/js/passwords.js adds "Show password" to every password box
+        // and a Generate button to those marked data-generate.
+        $html = $this->asAdmin()->get('admin/players/new')->response()->getBody();
+        $this->assertStringContainsString('js/passwords.js', $html);
+        $this->assertStringContainsString('name="password" autocomplete="new-password" data-generate>', $html);
+
+        $playerId = (int) (new PlayerModel())->insert(['first_name' => 'Jo', 'last_name' => 'Golfer', 'is_player' => 1]);
+        $html     = $this->withSession(['player_id' => $playerId])->get('password')->response()->getBody();
+        $this->assertStringContainsString('data-generate data-confirm="password_confirm"', $html);
+
+        $this->assertFileExists(FCPATH . 'js/passwords.js');
+    }
+
     public function testNewAdminMustChooseTheirPasswordBeforeUsingAdminPages(): void
     {
         $players = new PlayerModel();

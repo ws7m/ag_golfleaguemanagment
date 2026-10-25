@@ -18,7 +18,7 @@
         <input type="password" id="current_password" name="current_password" autocomplete="current-password" required autofocus>
     <?php endif ?>
     <label for="password">New password</label>
-    <input type="password" id="password" name="password" autocomplete="new-password"
+    <input type="password" id="password" name="password" autocomplete="new-password" data-generate data-confirm="password_confirm"
            minlength="<?= \App\Controllers\Auth::MIN_PASSWORD_LENGTH ?>" required <?= $forced ? 'autofocus' : '' ?>>
     <label for="password_confirm">New password again</label>
     <input type="password" id="password_confirm" name="password_confirm" autocomplete="new-password" required>
