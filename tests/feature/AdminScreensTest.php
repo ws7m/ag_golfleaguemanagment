@@ -1146,6 +1146,14 @@ final class AdminScreensTest extends CIUnitTestCase
         // New teams skip the numbers 1 and 3 already in use.
         $this->assertSame([2, 2, 2, 4, 4, 0, 0, 1, 3, 0], array_map($team, ['Ames', 'Baker', 'Cole', 'Dunn', 'Eads', 'Ford', 'Gray', 'Kim', 'Lee', 'Mae']));
 
+        // Everyone on a new team has the team's players as their team members
+        // (by last name); players on preset teams keep what they chose.
+        $this->seeInDatabase('scores', ['player_id' => $ids['Cole'], 'team_member1_id' => $ids['Ames'], 'team_member2_id' => $ids['Baker'], 'team_member3_id' => $ids['Cole'], 'team_member4_id' => null]);
+        $this->seeInDatabase('scores', ['player_id' => $ids['Baker'], 'team_member1_id' => $ids['Ames'], 'team_member3_id' => $ids['Cole']]);
+        $this->seeInDatabase('scores', ['player_id' => $ids['Eads'], 'team_member1_id' => $ids['Dunn'], 'team_member2_id' => $ids['Eads'], 'team_member5_id' => null]);
+        $this->seeInDatabase('scores', ['player_id' => $ids['Lee'], 'team_member1_id' => $ids['Kim'], 'team_member2_id' => null]);
+        $this->seeInDatabase('scores', ['player_id' => $ids['Gray'], 'team_member1_id' => null]);
+
         // Running it again changes nothing: everyone linked is now on a team.
         $this->asAdmin()->post('admin/scores/link-teams', ['round_id' => $roundId]);
         $this->assertSame([2, 2, 2, 4, 4, 0, 0, 1, 3, 0], array_map($team, ['Ames', 'Baker', 'Cole', 'Dunn', 'Eads', 'Ford', 'Gray', 'Kim', 'Lee', 'Mae']));
@@ -1213,6 +1221,42 @@ final class AdminScreensTest extends CIUnitTestCase
             ->assertSessionHas('message', 'No team scores to map: no team in this round has entered a hole score yet.');
     }
 
+    public function testTeamButtonsSaveTypedScoresFirst(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League', 'active' => 1]);
+        $courseId = (new CourseModel())->insert(['name' => 'Course']);
+        $db       = db_connect();
+        $db->table('games')->insert(['league_id' => $leagueId, 'name' => 'Scramble', 'team_game' => 1]);
+        $roundId = (new RoundModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-06-14', 'game_id' => $db->insertID(), 'status' => 'active']);
+        $ids     = [];
+        foreach (['Ames', 'Baker', 'Cole'] as $last) {
+            $playerId = (new PlayerModel())->insert(['first_name' => 'Pat', 'last_name' => $last, 'league_id' => $leagueId]);
+            $db->table('scores')->insert(['league_id' => $leagueId, 'round_id' => $roundId, 'player_id' => $playerId, 'nine' => 'front', 'team_number' => 2]);
+            $ids[$last] = (int) $db->insertID();
+        }
+
+        // The buttons send the list's typed boxes with them.
+        $html = $this->asAdmin()->get("admin/scores?round_id={$roundId}")->response()->getBody();
+        $this->assertStringContainsString('form="hole-scores" name="then" value="map_team_scores"', $html);
+
+        // Scores typed for one member, not yet saved, then Map Team Scores:
+        // they're saved and copied to the whole team.
+        $typed = array_combine(array_map(static fn ($h) => "hole{$h}", range(1, 9)), ['4', '5', '3', '4', '4', '5', '3', '4', '4']);
+        $this->asAdmin()->post('admin/scores/save', [
+            'scores'          => [$ids['Ames'] => ['team_number' => '2'] + $typed, $ids['Baker'] => ['team_number' => '2'], $ids['Cole'] => ['team_number' => '2']],
+            'return_round_id' => $roundId,
+            'then'            => 'map_team_scores',
+        ])->assertSessionHas('message', "3 scores saved. Mapped team scores for 1 team: each member now has the team's lowest score on every hole entered (18 hole scores changed).");
+        foreach ($ids as $id) {
+            $this->seeInDatabase('scores', ['id' => $id, 'hole1' => 4, 'hole9' => 4, 'gross' => 36]);
+        }
+
+        // A typing mistake stops the button's job.
+        $this->asAdmin()->post('admin/scores/save', [
+            'scores' => [$ids['Ames'] => ['hole1' => '40']], 'return_round_id' => $roundId, 'then' => 'link_teams',
+        ])->assertSessionHas('error', 'Hole 1 must be a number from 0 to 20 (score ' . $ids['Ames'] . '). 0 other scores were saved. Link Teams was not run; fix the scores above and try again.');
+    }
+
     public function testTeamsFromGroupsKeepsLinkedTeamsAndSkipsTheirNumbers(): void
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'League']);
@@ -1238,6 +1282,12 @@ final class AdminScreensTest extends CIUnitTestCase
                 . ' 2 players were already on a team and kept it. Check teams: Team 1 has 1 player; Team 2 has 1 player; Team 3 has 1 player; Team 5 has 1 player.');
         $team = static fn (string $last) => (int) $db->table('scores')->where('id', $ids[$last])->get()->getRow()->team_number;
         $this->assertSame([1, 2, 3, 4, 4, 5, 0], array_map($team, ['Ames', 'Baker', 'Cole', 'Dunn', 'Eads', 'Ford', 'Gray']));
+
+        // The new teams' members are filled in; Ames's preset team isn't touched.
+        $player = static fn (string $last) => (int) $db->table('scores')->where('id', $ids[$last])->get()->getRow()->player_id;
+        $this->seeInDatabase('scores', ['id' => $ids['Dunn'], 'team_member1_id' => $player('Dunn'), 'team_member2_id' => $player('Eads'), 'team_member3_id' => null]);
+        $this->seeInDatabase('scores', ['id' => $ids['Cole'], 'team_member1_id' => $player('Cole'), 'team_member2_id' => null]);
+        $this->seeInDatabase('scores', ['id' => $ids['Ames'], 'team_member1_id' => null]);
     }
 
     public function testAdminScoreEditPageHasTeamMembers(): void

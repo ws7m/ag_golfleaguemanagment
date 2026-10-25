@@ -181,11 +181,44 @@ class Scores extends CrudController
 
         $back     = redirect()->to($this->listUrl());
         $warnings = self::teamSizeWarnings(array_keys($rounds));
+        $then     = self::TEAM_ACTIONS[(string) $this->request->getPost('then')] ?? null;
         if ($errors !== []) {
-            return $back->with('error', trim(implode(' ', $errors) . " {$saved} other scores were saved. {$warnings}"));
+            $skipped = $then === null ? '' : " {$then[1]} was not run; fix the scores above and try again.";
+
+            return $back->with('error', trim(implode(' ', $errors) . " {$saved} other scores were saved.{$skipped} {$warnings}"));
+        }
+
+        // The team buttons save what was typed in the list first, so
+        // nothing typed is lost, then do their job.
+        if ($then !== null) {
+            $this->savedNote = "{$saved} scores saved.";
+
+            return $this->{$then[0]}();
         }
 
         return $back->with('message', trim("{$saved} scores saved. {$warnings}"));
+    }
+
+    /**
+     * The team buttons, which send the typed scores with them: posted
+     * "then" value => [method, button name].
+     */
+    private const TEAM_ACTIONS = [
+        'link_teams'        => ['linkTeams', 'Link Teams'],
+        'teams_from_groups' => ['teamsFromGroups', 'Teams = groups'],
+        'map_team_scores'   => ['mapTeamScores', 'Map Team Scores'],
+    ];
+
+    /** "N scores saved." when a team button saved the typed scores first. */
+    private string $savedNote = '';
+
+    /**
+     * The round a team button is for: posted on its own, or as the list's
+     * round when it came with the typed scores.
+     */
+    private function postedRoundId(): int
+    {
+        return (int) ($this->request->getPost('round_id') ?: $this->request->getPost('return_round_id'));
     }
 
     /**
@@ -199,7 +232,7 @@ class Scores extends CrudController
      */
     public function linkTeams()
     {
-        $roundId = (int) $this->request->getPost('round_id');
+        $roundId = $this->postedRoundId();
         $back    = redirect()->to(site_url($this->baseRoute . "?round_id={$roundId}"));
         $round   = $roundId > 0 ? (new RoundModel())->find($roundId) : null;
         if ($round === null) {
@@ -284,6 +317,7 @@ class Scores extends CrudController
             }
             $db->table('scores')->where('id', (int) $score['id'])->update(['team_number' => $numbers[$root], 'updated_at' => $now]);
         }
+        self::fillTeamMembers($roundId, array_values($numbers));
         $db->transComplete();
 
         $teams   = count($numbers);
@@ -299,7 +333,7 @@ class Scores extends CrudController
             $message .= ' Not linked, because they have no score in this round: ' . implode('; ', $missing) . '.';
         }
 
-        return $back->with('message', trim($message . ' ' . self::teamSizeWarnings([$roundId])));
+        return $back->with('message', trim("{$this->savedNote} {$message} " . self::teamSizeWarnings([$roundId])));
     }
 
     /**
@@ -311,7 +345,7 @@ class Scores extends CrudController
      */
     public function mapTeamScores()
     {
-        $roundId = (int) $this->request->getPost('round_id');
+        $roundId = $this->postedRoundId();
         $back    = redirect()->to(site_url($this->baseRoute . "?round_id={$roundId}"));
         if ($roundId <= 0 || (new RoundModel())->find($roundId) === null) {
             return $back->with('error', 'Choose a round first.');
@@ -358,12 +392,14 @@ class Scores extends CrudController
         $db->transComplete();
 
         if ($mapped === 0) {
-            return $back->with('message', 'No team scores to map: no team in this round has entered a hole score yet.');
+            return $back->with('message', trim("{$this->savedNote} No team scores to map: no team in this round has entered a hole score yet."));
         }
 
-        return $back->with('message', "Mapped team scores for {$mapped} " . ($mapped === 1 ? 'team' : 'teams')
-            . ": each member now has the team's lowest score on every hole entered ({$changed} hole "
-            . ($changed === 1 ? 'score' : 'scores') . ' changed).');
+        $teamWord = $mapped === 1 ? 'team' : 'teams';
+        $holeWord = $changed === 1 ? 'score' : 'scores';
+
+        return $back->with('message', trim("{$this->savedNote} Mapped team scores for {$mapped} {$teamWord}: each member now has"
+            . " the team's lowest score on every hole entered ({$changed} hole {$holeWord} changed)."));
     }
 
     /**
@@ -376,7 +412,7 @@ class Scores extends CrudController
      */
     public function teamsFromGroups()
     {
-        $roundId = (int) $this->request->getPost('round_id');
+        $roundId = $this->postedRoundId();
         $back    = redirect()->to(site_url($this->baseRoute . ($roundId ? "?round_id={$roundId}" : '')));
         if ($roundId <= 0 || (new RoundModel())->find($roundId) === null) {
             return $back->with('error', 'Choose a round first.');
@@ -424,6 +460,7 @@ class Scores extends CrudController
             $db->table('scores')->where('id', (int) $score['id'])->update(['team_number' => $teamFor[$group], 'updated_at' => $now]);
             $count++;
         }
+        self::fillTeamMembers($roundId, array_values($teamFor));
         $db->transComplete();
 
         $message = "{$count} scores set to a team by group.";
@@ -434,7 +471,41 @@ class Scores extends CrudController
             $message .= " {$kept} " . ($kept === 1 ? 'player was' : 'players were') . ' already on a team and kept it.';
         }
 
-        return $back->with('message', trim($message . ' ' . self::teamSizeWarnings([$roundId])));
+        return $back->with('message', trim("{$this->savedNote} {$message} " . self::teamSizeWarnings([$roundId])));
+    }
+
+    /**
+     * Sets the Team member boxes of everyone on the given teams in a round
+     * to that team's players (by last name; at most the number of boxes),
+     * so the scores show who is on each team.
+     *
+     * @param list<int> $teamNumbers
+     */
+    private static function fillTeamMembers(int $roundId, array $teamNumbers): void
+    {
+        if ($teamNumbers === []) {
+            return;
+        }
+        $db   = db_connect();
+        $rows = $db->table('scores s')
+            ->select('s.id, s.team_number, s.player_id')
+            ->join('players p', 'p.id = s.player_id')
+            ->where('s.round_id', $roundId)
+            ->whereIn('s.team_number', $teamNumbers)
+            ->orderBy('p.last_name')->orderBy('p.first_name')
+            ->get()->getResultArray();
+
+        $teams = [];
+        foreach ($rows as $row) {
+            $teams[(int) $row['team_number']][] = $row;
+        }
+        foreach ($teams as $members) {
+            $fields = [];
+            for ($i = 1; $i <= ScoreModel::TEAM_MEMBER_SLOTS; $i++) {
+                $fields["team_member{$i}_id"] = isset($members[$i - 1]) ? (int) $members[$i - 1]['player_id'] : null;
+            }
+            $db->table('scores')->whereIn('id', array_map('intval', array_column($members, 'id')))->update($fields);
+        }
     }
 
     /**
