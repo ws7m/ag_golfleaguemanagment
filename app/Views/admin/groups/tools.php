@@ -48,7 +48,8 @@ $leagueOptions = static function (string $id) use ($fields, $filterValues): stri
     <p class="muted">Works out how many groups the league needs for its registered players at
         <?= \App\Controllers\Admin\Groups::PLAYERS_PER_GROUP ?> players to a group (8 players need 2 groups, 9 need 3), and
         creates the ones that are missing. Groups the league already has count towards that. New groups are numbered after
-        the existing ones and start on the front nine, with no tee times: set those on each group.
+        the existing ones, with no tee times (set those on each group). The first half of the new groups start on the front
+        nine and the second half on the back nine.
         Then it puts every player who isn't in a group yet into one. Players who listed desired group members (first and last
         names, separated by commas) go in the same group as those players where there's room; everyone else fills the places
         left. Players already in a group are not moved.</p>

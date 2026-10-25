@@ -794,8 +794,9 @@ final class AdminScreensTest extends CIUnitTestCase
         // 9 players need 3 groups; 1 exists, so groups 2 and 3 are created,
         // and the 9 players fill them 4, 4, 1.
         $this->asAdmin()->post('admin/groups/generate', ['league_id' => $leagueId])
-            ->assertSessionHas('message', "9 registered players need 3 groups of 4. Created 2 (groups 2–3). Put 9 players into groups. Set each group's tee times on the group.");
-        $this->seeInDatabase('league_groups', ['league_id' => $leagueId, 'group_number' => 3, 'nine' => 'front', 'front_tee_time' => null]);
+            ->assertSessionHas('message', "9 registered players need 3 groups of 4. Created 2 (groups 2–3), group 2 on the front nine and group 3 on the back nine. Put 9 players into groups. Set each group's tee times on the group.");
+        $this->seeInDatabase('league_groups', ['league_id' => $leagueId, 'group_number' => 2, 'nine' => 'front', 'front_tee_time' => null]);
+        $this->seeInDatabase('league_groups', ['league_id' => $leagueId, 'group_number' => 3, 'nine' => 'back', 'back_tee_time' => null]);
         $filled = static fn (int $number) => count(\App\Models\LeagueGroupModel::playerIds(
             db_connect()->table('league_groups')->where(['league_id' => $leagueId, 'group_number' => $number])->get()->getRowArray()
         ));
@@ -803,6 +804,19 @@ final class AdminScreensTest extends CIUnitTestCase
 
         $this->asAdmin()->post('admin/groups/generate', ['league_id' => $leagueId])
             ->assertSessionHas('message', "9 registered players need 3 groups of 4. The league already has 3 groups, so none were created. Every player is already in a group. Set each group's tee times on the group.");
+    }
+
+    public function testCreatedGroupsAreSplitBetweenFrontAndBack(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
+        for ($i = 1; $i <= 20; $i++) {
+            (new PlayerModel())->insert(['first_name' => "P{$i}", 'last_name' => 'Golfer', 'league_id' => $leagueId]);
+        }
+        // 20 players need 5 groups: 1-3 front (the odd one out on the front), 4-5 back.
+        $this->asAdmin()->post('admin/groups/generate', ['league_id' => $leagueId])->assertSessionHas('message',
+            "20 registered players need 5 groups of 4. Created 5 (groups 1–5), groups 1–3 on the front nine and groups 4–5 on the back nine. Put 20 players into groups. Set each group's tee times on the group.");
+        $nines = array_column(db_connect()->table('league_groups')->where('league_id', $leagueId)->orderBy('group_number')->get()->getResultArray(), 'nine', 'group_number');
+        $this->assertSame([1 => 'front', 2 => 'front', 3 => 'front', 4 => 'back', 5 => 'back'], $nines);
     }
 
     public function testCreateGroupsPutsDesiredGroupMembersTogether(): void
@@ -824,7 +838,7 @@ final class AdminScreensTest extends CIUnitTestCase
         $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 1, 'player1_id' => $ids['Kim'], 'active' => 1]);
 
         $this->asAdmin()->post('admin/groups/generate', ['league_id' => $leagueId])
-            ->assertSessionHas('message', '12 registered players need 3 groups of 4. Created 2 (groups 2–3). Put 11 players into groups, 7 of them with the group members they asked for.'
+            ->assertSessionHas('message', '12 registered players need 3 groups of 4. Created 2 (groups 2–3), group 2 on the front nine and group 3 on the back nine. Put 11 players into groups, 7 of them with the group members they asked for.'
                 . " Desired group members not found: Nobody Here (named by Ivy Ives). Set each group's tee times on the group.");
 
         $groupOf = [];

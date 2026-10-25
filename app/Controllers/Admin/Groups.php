@@ -136,7 +136,8 @@ class Groups extends CrudController
      * Creates enough groups for the league's registered players at 4
      * players to a group (8 players need 2 groups, 9 need 3). Groups the
      * league already has count towards that. New groups are numbered after
-     * the existing ones and start on the front nine with no tee times.
+     * the existing ones, with no tee times; the first half start on the
+     * front nine and the second half on the back nine.
      * Then puts the players who aren't in a group yet into the groups,
      * keeping players together as asked in their desired group members
      * (see GroupAssigner).
@@ -164,17 +165,22 @@ class Groups extends CrudController
         if (count($existing) >= $needed) {
             $summary .= ' The league already has ' . count($existing) . ' groups, so none were created.';
         } else {
-            $number = (int) max([0, ...array_column($existing, 'group_number')]) + 1;
-            $first  = $number;
-            $db     = db_connect();
+            $number  = (int) max([0, ...array_column($existing, 'group_number')]) + 1;
+            $first   = $number;
+            $created = $needed - count($existing);
+            // The first half of the new groups start on the front nine and
+            // the rest on the back (an odd one out goes on the front).
+            $front = (int) ceil($created / 2);
+            $db    = db_connect();
             $db->transStart();
-            for ($i = count($existing); $i < $needed; $i++) {
-                $model->insert(['league_id' => $leagueId, 'group_number' => $number++, 'nine' => 'front', 'active' => 1]);
+            for ($i = 0; $i < $created; $i++) {
+                $model->insert(['league_id' => $leagueId, 'group_number' => $number++, 'nine' => $i < $front ? 'front' : 'back', 'active' => 1]);
             }
             $db->transComplete();
 
-            $created  = $number - $first;
-            $summary .= " Created {$created} (" . ($created === 1 ? "group {$first}" : "groups {$first}–" . ($number - 1)) . ').';
+            $summary .= " Created {$created} (" . ($created === 1 ? "group {$first}" : "groups {$first}–" . ($number - 1)) . ')';
+            $summary .= $created === 1 ? ' on the front nine.' : ', ' . self::groupRange($first, $front) . ' on the front nine and '
+                . self::groupRange($first + $front, $created - $front) . ' on the back nine.';
         }
 
         $result = GroupAssigner::assign($leagueId);
@@ -192,6 +198,14 @@ class Groups extends CrudController
         }
 
         return $back->with('message', $summary . ' Set each group\'s tee times on the group.');
+    }
+
+    /**
+     * "group 3" or "groups 3–5".
+     */
+    private static function groupRange(int $first, int $count): string
+    {
+        return $count === 1 ? "group {$first}" : "groups {$first}–" . ($first + $count - 1);
     }
 
     /**
