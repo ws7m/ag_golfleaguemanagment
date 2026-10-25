@@ -33,6 +33,9 @@ final class AdminScreensTest extends CIUnitTestCase
 
         // Each test starts with a clean login throttle.
         cache()->clean();
+        // The throttler is a shared service that would otherwise keep the
+        // cache it was first made with (not this test's) between tests.
+        \CodeIgniter\Config\Services::resetSingle('throttler');
 
         // Posts in these tests carry no CSRF token, so switch the check off
         // here (testPostWithoutCsrfTokenIsRefused checks it is on in the app).
@@ -1619,6 +1622,23 @@ final class AdminScreensTest extends CIUnitTestCase
         $result->assertSessionMissing('admin_id');
 
         $this->assertNotNull((new PlayerModel())->find($player['id'])['last_login_at'], 'Player login should record the login date.');
+    }
+
+    public function testAdminWhoPlaysHasALinkToTheirPlayerPage(): void
+    {
+        $players = new PlayerModel();
+        $id      = (int) $players->insert(['first_name' => 'Mark', 'last_name' => 'Holbrook', 'is_admin' => 1, 'is_player' => 1, 'must_change_password' => 0]);
+        $players->setPassword($id, 'fairway-27');
+
+        // Logging in goes to the admin pages, which link to the player page.
+        $this->post('login', ['login' => 'holbrm', 'password' => 'fairway-27'])->assertRedirectTo('/admin');
+        $session = ['admin_id' => $id, 'admin_name' => 'Mark Holbrook', 'player_id' => $id, 'player_name' => 'Mark Holbrook'];
+        $html    = $this->withSession($session)->get('admin')->response()->getBody();
+        $this->assertStringContainsString('/player">My page</a>', $html);
+        $this->withSession($session)->get('player')->assertOK();
+
+        // An admin-only account has no player page, so no link.
+        $this->assertStringNotContainsString('My page</a>', $this->asAdmin()->get('admin')->response()->getBody());
     }
 
     public function testFirstLoginMakesThePlayerChooseTheirOwnPassword(): void

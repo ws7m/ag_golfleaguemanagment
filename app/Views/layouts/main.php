@@ -20,6 +20,10 @@
             <a href="<?= site_url('admin/rounds') ?>">Rounds</a>
             <a href="<?= site_url('admin/scores') ?>">Scores</a>
             <a href="<?= site_url('admin/settings') ?>">Settings</a>
+            <?php if (session('player_id')): ?>
+                <?php // Admins who also play: their player page, to enter scores and vote. ?>
+                <a href="<?= site_url('player') ?>">My page</a>
+            <?php endif ?>
         </nav>
         <span class="who"><?= esc(session('admin_name')) ?> · <a href="<?= site_url('info') ?>">Update Info</a> · <a href="<?= site_url('password') ?>">Password</a> · <a href="<?= site_url('logout') ?>">Log out</a></span>
     <?php elseif (session('player_id')): ?>
