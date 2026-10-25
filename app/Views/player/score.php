@@ -26,9 +26,8 @@ $roundName = trim(date('n/j/Y', strtotime($round['round_date'])) . ' ' . ($round
     <p class="muted">You're marked as not playing this round. Saving scores marks you as playing.</p>
 <?php endif ?>
 
-<form method="post" action="<?= site_url('player/score') ?>">
+<form method="post" action="<?= site_url("player/score/{$round['id']}") ?>">
     <?= csrf_field() ?>
-    <input type="hidden" name="round_id" value="<?= (int) $round['id'] ?>">
     <div class="table-wrap">
         <table class="score-entry">
             <thead>

@@ -36,11 +36,15 @@ class Home extends BaseController
             ->orderBy('r.round_date')->orderBy('r.id')
             ->get()->getResultArray();
 
-        $active = $leagueId === null ? null : $this->activeRound($leagueId);
+        // An "Enter scores" button for each active round, unless the player
+        // said they aren't playing in it (on their score record, or before
+        // the round was made active if they have no score record yet).
+        $scoreRounds = array_values(array_filter($rounds, static fn ($r) => $r['status'] === 'active'
+            && (int) ($r['score_playing'] ?? $r['chosen_playing'] ?? 1) === 1));
 
         return view('player/home', [
             'title'  => 'My page',
-            'activeRound' => $active,
+            'scoreRounds' => $scoreRounds,
             'player' => $player,
             'notice' => $leagueId ? (new LeagueModel())->find($leagueId)['notice'] ?? null : null,
             'rounds' => $rounds,
@@ -121,15 +125,15 @@ class Home extends BaseController
     }
 
     /**
-     * Score entry for the league's active round: the player's nine holes on
-     * one line, saved together.
+     * Score entry for one of the league's active rounds: the player's nine
+     * holes on one line, saved together.
      */
-    public function score()
+    public function score(int $roundId)
     {
         $player = (new PlayerModel())->find(session('player_id'));
-        $round  = $this->activeRound((int) $this->leagueId($player));
+        $round  = $this->activeRound((int) $this->leagueId($player), $roundId);
         if ($round === null) {
-            return redirect()->to('player')->with('error', 'There is no active round to enter scores for.');
+            return redirect()->to('player')->with('error', 'Scores can only be entered while the round is active.');
         }
         $score = RoundEntries::scoreFor($round, $player);
         $nine  = $score['nine'] ?: 'front';
@@ -151,12 +155,12 @@ class Home extends BaseController
         ]);
     }
 
-    public function saveScore()
+    public function saveScore(int $roundId)
     {
         $player = (new PlayerModel())->find(session('player_id'));
-        $back   = redirect()->to('player/score');
-        $round  = $this->activeRound((int) $this->leagueId($player));
-        if ($round === null || (int) $this->request->getPost('round_id') !== (int) $round['id']) {
+        $back   = redirect()->to("player/score/{$roundId}");
+        $round  = $this->activeRound((int) $this->leagueId($player), $roundId);
+        if ($round === null) {
             return redirect()->to('player')->with('error', 'Scores can only be entered while the round is active.');
         }
 
@@ -187,13 +191,12 @@ class Home extends BaseController
     }
 
     /**
-     * The league's active round: the latest by date if more than one.
+     * A round of the league, if it is active.
      */
-    private function activeRound(int $leagueId): ?array
+    private function activeRound(int $leagueId, int $roundId): ?array
     {
         return db_connect()->table('rounds')
-            ->where(['league_id' => $leagueId, 'status' => 'active'])
-            ->orderBy('round_date', 'DESC')->orderBy('id', 'DESC')
+            ->where(['id' => $roundId, 'league_id' => $leagueId, 'status' => 'active'])
             ->get()->getRowArray();
     }
 

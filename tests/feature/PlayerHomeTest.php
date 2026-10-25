@@ -158,7 +158,7 @@ final class PlayerHomeTest extends CIUnitTestCase
 
         // No active round: no link, and the page sends the player back.
         $this->assertStringNotContainsString('player/score', $this->asPlayer()->get('player')->response()->getBody());
-        $this->asPlayer()->get('player/score')->assertRedirectTo('/player');
+        $this->asPlayer()->get('player/score/1')->assertRedirectTo('/player');
 
         $db->table('rounds')->insert(['league_id' => $this->leagueId, 'course_id' => $courseId, 'round_date' => '2099-06-07', 'name' => 'Round 1', 'status' => 'active']);
         $roundId = (int) $db->insertID();
@@ -168,7 +168,7 @@ final class PlayerHomeTest extends CIUnitTestCase
         $this->assertLessThan(strpos($home, '<h2>Rounds</h2>'), strpos($home, 'player/score'));
 
         // The page shows the nine holes on one line with the player's tee pars.
-        $page = $this->asPlayer()->get('player/score');
+        $page = $this->asPlayer()->get("player/score/{$roundId}");
         $page->assertOK();
         $body = $page->response()->getBody();
         $this->assertSame(9, substr_count($body, 'name="holes[hole'));
@@ -179,31 +179,70 @@ final class PlayerHomeTest extends CIUnitTestCase
         // The game line says which game, and whether it's a team game.
         $db->table('games')->insert(['league_id' => $this->leagueId, 'name' => 'Best Ball', 'team_game' => 1]);
         $db->table('rounds')->where('id', $roundId)->update(['game_id' => $db->insertID()]);
-        $body = $this->asPlayer()->get('player/score')->response()->getBody();
+        $body = $this->asPlayer()->get("player/score/{$roundId}")->response()->getBody();
         $this->assertMatchesRegularExpression('#Game: <strong>Best Ball</strong> ·\s*<strong>Team game</strong>#', $body);
         $this->assertLessThan(strpos($body, 'name="holes[hole1]"'), strpos($body, 'Best Ball'));
 
         // Partly entered: saved without a total. No score record yet, so one is added.
         $holes = ['hole1' => '5', 'hole2' => '4', 'hole3' => ''];
-        $this->asPlayer()->post('player/score', ['round_id' => $roundId, 'holes' => $holes])
+        $this->asPlayer()->post("player/score/{$roundId}", ['holes' => $holes])
             ->assertSessionHas('message', 'Scores saved. Your total shows once all nine holes are entered.');
         $this->seeInDatabase('scores', ['round_id' => $roundId, 'player_id' => $this->playerId, 'hole1' => 5, 'hole2' => 4, 'hole3' => 0, 'gross' => null, 'playing' => 1]);
 
         // All nine: gross and net (gross less handicap).
         $holes = array_combine(array_map(static fn ($h) => "hole{$h}", range(1, 9)), array_fill(0, 9, '5'));
-        $this->asPlayer()->post('player/score', ['round_id' => $roundId, 'holes' => $holes])
+        $this->asPlayer()->post("player/score/{$roundId}", ['holes' => $holes])
             ->assertSessionHas('message', 'Scores saved. Gross 45, net 39.');
         $this->assertSame(1, $db->table('scores')->where('round_id', $roundId)->countAllResults());
 
         // A bad number saves nothing.
-        $this->asPlayer()->post('player/score', ['round_id' => $roundId, 'holes' => ['hole1' => '25'] + $holes])
+        $this->asPlayer()->post("player/score/{$roundId}", ['holes' => ['hole1' => '25'] + $holes])
             ->assertSessionHas('error', 'Hole 1 must be a number from 0 to 20. Nothing was saved.');
         $this->seeInDatabase('scores', ['round_id' => $roundId, 'hole1' => 5]);
 
         // Locked scores can't be changed, and only the active round takes scores.
         $db->table('scores')->where('round_id', $roundId)->update(['locked' => 1]);
-        $this->asPlayer()->post('player/score', ['round_id' => $roundId, 'holes' => ['hole1' => '3'] + $holes])->assertSessionHas('error');
+        $this->asPlayer()->post("player/score/{$roundId}", ['holes' => ['hole1' => '3'] + $holes])->assertSessionHas('error');
         $this->seeInDatabase('scores', ['round_id' => $roundId, 'hole1' => 5]);
-        $this->asPlayer()->post('player/score', ['round_id' => $roundId + 1, 'holes' => $holes])->assertRedirectTo('/player');
+        $this->asPlayer()->post('player/score/' . ($roundId + 1), ['holes' => $holes])->assertRedirectTo('/player');
+    }
+
+    public function testEnterScoresButtonForEachActiveRoundThePlayerIsIn(): void
+    {
+        $db = db_connect();
+        $db->table('courses')->insert(['name' => 'Home Course']);
+        $courseId = (int) $db->insertID();
+        $round    = function (string $date, string $name, string $status) use ($db, $courseId): int {
+            $db->table('rounds')->insert(['league_id' => $this->leagueId, 'course_id' => $courseId, 'round_date' => $date, 'name' => $name, 'status' => $status]);
+
+            return (int) $db->insertID();
+        };
+        $first     = $round('2099-06-07', 'Round 1', 'active');
+        $second    = $round('2099-06-14', 'Round 2', 'active');
+        $third     = $round('2099-06-21', 'Round 3', 'active');
+        $scheduled = $round('2099-06-28', 'Round 4', 'scheduled');
+
+        // Not playing round 2 (score record) or round 3 (said so before it was active).
+        $db->table('scores')->insert(['league_id' => $this->leagueId, 'round_id' => $second, 'player_id' => $this->playerId, 'playing' => 0]);
+        $db->table('round_playing')->insert(['round_id' => $third, 'player_id' => $this->playerId, 'playing' => 0]);
+
+        $home = $this->asPlayer()->get('player')->response()->getBody();
+        $this->assertStringContainsString("player/score/{$first}\">Enter scores for 6/7/2099 Round 1</a>", $home);
+        $this->assertStringNotContainsString("player/score/{$second}", $home);
+        $this->assertStringNotContainsString("player/score/{$third}", $home);
+        $this->assertStringNotContainsString("player/score/{$scheduled}", $home);
+
+        // Playing again in round 2: both buttons show.
+        $db->table('scores')->where('round_id', $second)->update(['playing' => 1]);
+        $home = $this->asPlayer()->get('player')->response()->getBody();
+        $this->assertStringContainsString("player/score/{$first}", $home);
+        $this->assertStringContainsString("player/score/{$second}\">Enter scores for 6/14/2099 Round 2</a>", $home);
+
+        // Each round's page saves to that round; a scheduled round takes no scores.
+        $this->asPlayer()->get("player/score/{$second}")->assertSee('Round 2');
+        $this->asPlayer()->post("player/score/{$second}", ['holes' => ['hole1' => '4']])->assertRedirectTo("/player/score/{$second}");
+        $this->seeInDatabase('scores', ['round_id' => $second, 'player_id' => $this->playerId, 'hole1' => 4]);
+        $this->dontSeeInDatabase('scores', ['round_id' => $first, 'player_id' => $this->playerId]);
+        $this->asPlayer()->get("player/score/{$scheduled}")->assertRedirectTo('/player');
     }
 }
