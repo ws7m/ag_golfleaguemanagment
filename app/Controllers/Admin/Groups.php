@@ -488,6 +488,58 @@ class Groups extends CrudController
     }
 
     /**
+     * Sets the front nine (or back nine) tee time of the league's active
+     * groups now playing that nine: the first group by number gets the
+     * starting time and each next group that many minutes later (e.g.
+     * 16:00, 16:08, 16:16). Nothing changes if a time would pass midnight.
+     */
+    public function generateTeeTimes()
+    {
+        $leagueId  = (int) $this->request->getPost('league_id');
+        $nine      = (string) $this->request->getPost('nine');
+        $start     = (string) $this->request->getPost('start');
+        $increment = (int) $this->request->getPost('increment');
+        $back      = redirect()->to($this->baseRoute . '?league_id=' . $leagueId);
+        if ($leagueId <= 0 || ! in_array($nine, ['front', 'back'], true)) {
+            return $back->with('error', 'Choose a league.');
+        }
+        if (! preg_match('/^([01]\d|2[0-3]):([0-5]\d)$/', $start, $m)) {
+            return $back->with('error', 'Enter the starting tee time, e.g. 16:00.');
+        }
+        if ($increment < 1 || $increment > 60) {
+            return $back->with('error', 'The minutes between tee times must be from 1 to 60.');
+        }
+
+        $groups = (new LeagueGroupModel())
+            ->where(['league_id' => $leagueId, 'active' => 1])
+            ->orderBy('group_number')->findAll();
+        $groups = array_values(array_filter($groups, static fn ($g) => ($g['nine'] === 'back' ? 'back' : 'front') === $nine));
+        if ($groups === []) {
+            return $back->with('error', "No groups are playing the {$nine} nine.");
+        }
+
+        $first = (int) $m[1] * 60 + (int) $m[2];
+        $last  = $first + (count($groups) - 1) * $increment;
+        if ($last >= 24 * 60) {
+            return $back->with('error', count($groups) . " groups {$increment} minutes apart from {$start} would go past midnight. Nothing was changed.");
+        }
+
+        $field = "{$nine}_tee_time";
+        $db    = db_connect();
+        $db->transStart();
+        foreach ($groups as $i => $group) {
+            $total = $first + $i * $increment;
+            $db->table('league_groups')->where('id', (int) $group['id'])
+                ->update([$field => sprintf('%02d:%02d', intdiv($total, 60), $total % 60), 'updated_at' => date('Y-m-d H:i:s')]);
+        }
+        $db->transComplete();
+
+        $end = sprintf('%02d:%02d', intdiv($last, 60), $last % 60);
+
+        return $back->with('message', count($groups) . " groups playing the {$nine} nine now have {$nine} nine tee times from {$start} to {$end}, {$increment} minutes apart.");
+    }
+
+    /**
      * Moves the front nine (or back nine) tee time of every group in a league
      * earlier or later by a number of minutes, e.g. for daylight changes.
      * Groups without that tee time are skipped. Nothing changes if any time

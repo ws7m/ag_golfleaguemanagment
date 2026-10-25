@@ -521,6 +521,42 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->assertSame(2, db_connect()->table('league_groups')->where('front_tee_time', '15:10')->countAllResults());
     }
 
+    public function testGenerateFrontAndBackTeeTimes(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
+        $groups   = db_connect()->table('league_groups');
+        foreach ([[1, 'front'], [2, 'back'], [3, 'front'], [4, 'back'], [5, 'front'], [6, 'front', 0]] as $g) {
+            $groups->insert(['league_id' => $leagueId, 'group_number' => $g[0], 'nine' => $g[1], 'active' => $g[2] ?? 1, 'front_tee_time' => '09:00', 'back_tee_time' => '09:00']);
+        }
+        $time = static fn (int $number, string $nine) => db_connect()->table('league_groups')
+            ->where(['league_id' => $leagueId, 'group_number' => $number])->get()->getRowArray()["{$nine}_tee_time"];
+
+        // The boxes are above the shift boxes.
+        $html = $this->asAdmin()->get("admin/groups?league_id={$leagueId}")->response()->getBody();
+        $this->assertLessThan(strpos($html, 'id="shift-tee-times"'), strpos($html, 'id="generate-tee-times"'));
+        $this->assertLessThan(strpos($html, 'Generate back nine tee times'), strpos($html, 'Generate front nine tee times'));
+
+        // Front: groups 1, 3, 5 (inactive group 6 skipped); their back times untouched.
+        $this->asAdmin()->post('admin/groups/generate-tee-times', ['league_id' => $leagueId, 'nine' => 'front', 'start' => '16:00', 'increment' => '8'])
+            ->assertSessionHas('message', '3 groups playing the front nine now have front nine tee times from 16:00 to 16:16, 8 minutes apart.');
+        $this->assertSame(['16:00', '16:08', '16:16'], [$time(1, 'front'), $time(3, 'front'), $time(5, 'front')]);
+        $this->assertSame('09:00', $time(1, 'back'));
+        $this->assertSame('09:00', $time(2, 'front'));
+        $this->assertSame('09:00', $time(6, 'front'));
+
+        // Back: groups 2 and 4.
+        $this->asAdmin()->post('admin/groups/generate-tee-times', ['league_id' => $leagueId, 'nine' => 'back', 'start' => '15:55', 'increment' => '10'])
+            ->assertSessionHas('message', '2 groups playing the back nine now have back nine tee times from 15:55 to 16:05, 10 minutes apart.');
+        $this->assertSame(['15:55', '16:05'], [$time(2, 'back'), $time(4, 'back')]);
+
+        // Bad input or past midnight changes nothing.
+        $this->asAdmin()->post('admin/groups/generate-tee-times', ['league_id' => $leagueId, 'nine' => 'front', 'start' => '4pm', 'increment' => '8'])->assertSessionHas('error');
+        $this->asAdmin()->post('admin/groups/generate-tee-times', ['league_id' => $leagueId, 'nine' => 'front', 'start' => '16:00', 'increment' => '0'])->assertSessionHas('error');
+        $this->asAdmin()->post('admin/groups/generate-tee-times', ['league_id' => $leagueId, 'nine' => 'front', 'start' => '23:50', 'increment' => '8'])
+            ->assertSessionHas('error', '3 groups 8 minutes apart from 23:50 would go past midnight. Nothing was changed.');
+        $this->assertSame('16:00', $time(1, 'front'));
+    }
+
     public function testShiftFrontAndBackTeeTimesForAllGroups(): void
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'League']);

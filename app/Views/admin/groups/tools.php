@@ -23,6 +23,28 @@ $leagueOptions = static function (string $id) use ($fields, $filterValues): stri
     </form>
 </section>
 
+<div class="panel-pair" id="generate-tee-times">
+<?php foreach (['front' => 'Front nine', 'back' => 'Back nine'] as $nine => $nineLabel): ?>
+    <section class="panel">
+        <h2>Generate <?= strtolower($nineLabel) ?> tee times</h2>
+        <p class="muted">Sets the <?= strtolower($nineLabel) ?> tee time of every group now playing the <?= strtolower($nineLabel) ?>,
+            in group number order: the first gets the starting time and each next group the given minutes later.</p>
+        <form method="post" action="<?= site_url('admin/groups/generate-tee-times') ?>" class="form inline"
+              onsubmit="return confirm('Set the <?= strtolower($nineLabel) ?> tee times of every group playing the <?= strtolower($nineLabel) ?>, starting at ' + this.start.value + ', ' + this.increment.value + ' minutes apart?')">
+            <?= csrf_field() ?>
+            <input type="hidden" name="nine" value="<?= $nine ?>">
+            <label for="gen_<?= $nine ?>_league">League</label>
+            <?= $leagueOptions("gen_{$nine}_league") ?>
+            <label for="gen_<?= $nine ?>_start">Start</label>
+            <input type="time" id="gen_<?= $nine ?>_start" name="start" required style="width: 8rem">
+            <label for="gen_<?= $nine ?>_increment">Minutes apart</label>
+            <input type="number" id="gen_<?= $nine ?>_increment" name="increment" min="1" max="60" value="8" required style="width: 5rem">
+            <button type="submit">Generate</button>
+        </form>
+    </section>
+<?php endforeach ?>
+</div>
+
 <div class="panel-pair" id="shift-tee-times">
 <?php foreach (['front' => 'Front nine', 'back' => 'Back nine'] as $nine => $nineLabel): ?>
     <section class="panel">
