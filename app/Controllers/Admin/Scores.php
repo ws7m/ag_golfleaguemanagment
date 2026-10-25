@@ -276,6 +276,70 @@ class Scores extends CrudController
     }
 
     /**
+     * For each team in a round (team number above 0), sets every member's
+     * score on each hole to the lowest score any member entered for that
+     * hole. Holes no one on the team has entered (blank or 0) are left
+     * alone, so a team that hasn't entered anything isn't changed. Gross
+     * and net are worked out again for the scores that change.
+     */
+    public function mapTeamScores()
+    {
+        $roundId = (int) $this->request->getPost('round_id');
+        $back    = redirect()->to(site_url($this->baseRoute . "?round_id={$roundId}"));
+        if ($roundId <= 0 || (new RoundModel())->find($roundId) === null) {
+            return $back->with('error', 'Choose a round first.');
+        }
+
+        $db    = db_connect();
+        $teams = [];
+        foreach ($db->table('scores')->where('round_id', $roundId)->where('team_number >', 0)->get()->getResultArray() as $score) {
+            $teams[(int) $score['team_number']][] = $score;
+        }
+        ksort($teams);
+
+        $now     = date('Y-m-d H:i:s');
+        $mapped  = 0;
+        $changed = 0;
+        $db->transStart();
+        foreach ($teams as $members) {
+            // The lowest score entered on each hole by anyone on the team.
+            $best = [];
+            for ($hole = 1; $hole <= 18; $hole++) {
+                $entered = array_filter(array_map(static fn ($s) => (int) ($s["hole{$hole}"] ?? 0), $members), static fn ($v) => $v > 0);
+                if ($entered !== []) {
+                    $best["hole{$hole}"] = min($entered);
+                }
+            }
+            if ($best === []) {
+                continue;
+            }
+            $mapped++;
+            foreach ($members as $score) {
+                $updates = array_filter($best, static fn ($value, $key) => (int) ($score[$key] ?? 0) !== $value, ARRAY_FILTER_USE_BOTH);
+                if ($updates === []) {
+                    continue;
+                }
+                $changed += count($updates);
+                $updates['gross'] = ScoreModel::grossForNine($updates + $score);
+                $updates['net']   = $updates['gross'] !== null && $score['handicap_used'] !== null
+                    ? $updates['gross'] - (int) $score['handicap_used']
+                    : null;
+                $updates['updated_at'] = $now;
+                $db->table('scores')->where('id', (int) $score['id'])->update($updates);
+            }
+        }
+        $db->transComplete();
+
+        if ($mapped === 0) {
+            return $back->with('message', 'No team scores to map: no team in this round has entered a hole score yet.');
+        }
+
+        return $back->with('message', "Mapped team scores for {$mapped} " . ($mapped === 1 ? 'team' : 'teams')
+            . ": each member now has the team's lowest score on every hole entered ({$changed} hole "
+            . ($changed === 1 ? 'score' : 'scores') . ' changed).');
+    }
+
+    /**
      * Sets each score's team number to its group number, for the round
      * shown, so teams start out as the groups players tee off with. Scores
      * without a group are not changed.

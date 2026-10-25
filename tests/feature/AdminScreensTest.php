@@ -1137,6 +1137,61 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->asAdmin()->post('admin/scores/link-teams', ['round_id' => 999])->assertSessionHas('error', 'Choose a round first.');
     }
 
+    public function testMapTeamScoresGivesEachMemberTheTeamsBestHole(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League', 'active' => 1]);
+        $courseId = (new CourseModel())->insert(['name' => 'Course']);
+        $db       = db_connect();
+        $db->table('games')->insert(['league_id' => $leagueId, 'name' => 'Best Ball', 'team_game' => 1]);
+        $roundId = (new RoundModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-06-07', 'game_id' => $db->insertID(), 'status' => 'active']);
+
+        $ids   = [];
+        $score = static function (string $last, int $team, array $holes, int $handicap = 0) use (&$ids, $db, $leagueId, $roundId): void {
+            $ids[$last] = (int) (new PlayerModel())->insert(['first_name' => 'Pat', 'last_name' => $last, 'league_id' => $leagueId]);
+            $row = ['league_id' => $leagueId, 'round_id' => $roundId, 'player_id' => $ids[$last], 'nine' => 'front', 'team_number' => $team, 'handicap_used' => $handicap];
+            for ($h = 1; $h <= 18; $h++) {
+                $row["hole{$h}"] = $holes[$h - 1] ?? 0;
+            }
+            $db->table('scores')->insert($row);
+        };
+        // Team 1: hole 1 best is 3, hole 2 best is 4 (0 = not entered is ignored), hole 3 nobody yet.
+        $score('Ames', 1, [5, 0, 0, 4, 4, 4, 4, 4, 4], 2);
+        $score('Baker', 1, [3, 6, 0, 5, 5, 5, 5, 5, 5]);
+        $score('Cole', 1, [4, 4, 0, 3, 3, 3, 3, 3, 3]);
+        // Team 2 hasn't entered anything; Dunn (team 0) plays alone.
+        $score('Eads', 2, []);
+        $score('Ford', 2, []);
+        $score('Dunn', 0, [9, 9, 9, 9, 9, 9, 9, 9, 9]);
+
+        $html = $this->asAdmin()->get("admin/scores?round_id={$roundId}")->response()->getBody();
+        $this->assertLessThan(strpos($html, 'Map Team Scores'), strpos($html, 'Link Teams'));
+
+        $this->asAdmin()->post('admin/scores/map-team-scores', ['round_id' => $roundId])
+            ->assertSessionHas('message', "Mapped team scores for 1 team: each member now has the team's lowest score on every hole entered (16 hole scores changed).");
+        $holes = static fn (string $last) => array_map('intval', array_values(array_intersect_key(
+            $db->table('scores')->where('player_id', $ids[$last])->get()->getRowArray(),
+            array_flip(array_map(static fn ($h) => "hole{$h}", range(1, 9)))
+        )));
+        foreach (['Ames', 'Baker', 'Cole'] as $last) {
+            $this->assertSame([3, 4, 0, 3, 3, 3, 3, 3, 3], $holes($last), $last);
+        }
+        $this->assertSame([0, 0, 0, 0, 0, 0, 0, 0, 0], $holes('Eads'));
+        $this->assertSame([9, 9, 9, 9, 9, 9, 9, 9, 9], $holes('Dunn'));
+        // Hole 3 is still blank, so there's no total yet.
+        $this->seeInDatabase('scores', ['player_id' => $ids['Ames'], 'gross' => null]);
+
+        // Once hole 3 is in, mapping again totals gross and net.
+        $db->table('scores')->where('player_id', $ids['Cole'])->update(['hole3' => 5]);
+        $this->asAdmin()->post('admin/scores/map-team-scores', ['round_id' => $roundId])->assertSessionHas('message');
+        $this->seeInDatabase('scores', ['player_id' => $ids['Ames'], 'hole3' => 5, 'gross' => 30, 'net' => 28]);
+        $this->seeInDatabase('scores', ['player_id' => $ids['Baker'], 'gross' => 30, 'net' => 30]);
+
+        // No team scores at all.
+        $db->table('scores')->where('team_number >', 0)->update(array_fill_keys(array_map(static fn ($h) => "hole{$h}", range(1, 18)), 0));
+        $this->asAdmin()->post('admin/scores/map-team-scores', ['round_id' => $roundId])
+            ->assertSessionHas('message', 'No team scores to map: no team in this round has entered a hole score yet.');
+    }
+
     public function testAdminScoreEditPageHasTeamMembers(): void
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'League', 'active' => 1]);
