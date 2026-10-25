@@ -47,6 +47,16 @@ class Lookup
     }
 
     /**
+     * Players as "First Last", sorted that way: the team member choices.
+     */
+    public static function playersFirstLast(): array
+    {
+        $rows = (new PlayerModel())->where('is_player', 1)->orderBy('first_name')->orderBy('last_name')->findAll();
+
+        return self::labels($rows, static fn ($r) => trim("{$r['first_name']} {$r['last_name']}"));
+    }
+
+    /**
      * Player labels without the member number: "Last, First".
      */
     public static function playerNames(): array

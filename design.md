@@ -174,7 +174,7 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
   - Paid - Yes/No; set by admin when the entry fee is paid
   - Locked
   - Team number - Players in the same round with the same team number are a team (for team games); 0 = an individual score. Default 0. Entered on the scores list or edit page; "Teams = groups" sets each player's team to their group number for a round. Saving warns about teams of 1 player or more than 4. No separate teams table for now.
-- Team members 1-4 - Player ids a player chooses on their score entry page for a team game (their own name is filled in first). "Link Teams" on the admin scores page (shown under the round choice for a team game) sets team numbers from them: a player and everyone they named are one team, teams that share a player are joined, and players with no team members are set to 0.
+- Team members 1-4 - Player ids a player chooses on their score entry page for a team game (their own name is filled in first); the admin can also set them on a score's edit page. "Link Teams" on the admin scores page (shown under the round choice for a team game) sets team numbers from them: a player and everyone they named are one team, teams that share a player are joined, and players with no team members are set to 0.
 - The admin scores page always shows one round, chosen from a list of "date - round name - game - Team: Yes/No" (no "All"). Without a choice it shows the active round, else the next round from today, else the most recent. The list has no Round column.
   - Hole1 to Hole18 - Strokes per hole; 0 (or blank) means not entered yet. Only the nine played is filled in.
   - Gross - Total strokes

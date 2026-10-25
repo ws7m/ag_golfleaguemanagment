@@ -52,6 +52,11 @@ class Scores extends CrudController
             'team_number' => ['label' => 'Team', 'type' => 'number', 'default' => 0,
                 'help' => 'Players in this round with the same team number are a team. 0 = individual score.'],
         ];
+        // The team the player chose on their score entry page (team games);
+        // "Link Teams" turns these into team numbers.
+        for ($i = 1; $i <= ScoreModel::TEAM_MEMBER_SLOTS; $i++) {
+            $fields["team_member{$i}_id"] = ['label' => "Team member {$i}", 'type' => 'select', 'options' => 'playersFirstLast', 'compact' => 'team'];
+        }
         for ($i = 1; $i <= 18; $i++) {
             $fields["hole{$i}"] = ['label' => "Hole {$i}", 'type' => 'number', 'compact' => 'holes'];
         }
@@ -375,6 +380,16 @@ class Scores extends CrudController
 
     protected function checkBeforeSave(array $data, ?int $id): ?string
     {
+        $members = [];
+        for ($i = 1; $i <= ScoreModel::TEAM_MEMBER_SLOTS; $i++) {
+            if (! empty($data["team_member{$i}_id"])) {
+                $members[] = (int) $data["team_member{$i}_id"];
+            }
+        }
+        if (count($members) !== count(array_unique($members))) {
+            return 'A player is chosen more than once as a team member.';
+        }
+
         $existing = (new ScoreModel())
             ->where('round_id', $data['round_id'])
             ->where('player_id', $data['player_id']);

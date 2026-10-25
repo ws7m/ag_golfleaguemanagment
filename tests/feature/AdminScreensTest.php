@@ -1136,6 +1136,29 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->asAdmin()->post('admin/scores/link-teams', ['round_id' => 999])->assertSessionHas('error', 'Choose a round first.');
     }
 
+    public function testAdminScoreEditPageHasTeamMembers(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League', 'active' => 1]);
+        $courseId = (new CourseModel())->insert(['name' => 'Course']);
+        $roundId  = (new RoundModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-06-07']);
+        $ann      = (int) (new PlayerModel())->insert(['first_name' => 'Ann', 'last_name' => 'Ames', 'league_id' => $leagueId]);
+        $bob      = (int) (new PlayerModel())->insert(['first_name' => 'Bob', 'last_name' => 'Baker', 'league_id' => $leagueId]);
+        db_connect()->table('scores')->insert(['league_id' => $leagueId, 'round_id' => $roundId, 'player_id' => $ann, 'team_member2_id' => $bob]);
+        $scoreId = (int) db_connect()->insertID();
+
+        $html = $this->asAdmin()->get("admin/scores/{$scoreId}/edit")->response()->getBody();
+        $this->assertSame(4, substr_count($html, 'name="team_member'));
+        $this->assertMatchesRegularExpression('#name="team_member2_id".*?<option value="' . $bob . '" selected>Bob Baker</option>#s', $html);
+
+        $form = ['round_id' => $roundId, 'player_id' => $ann, 'playing' => '1', 'team_member1_id' => (string) $ann, 'team_member2_id' => (string) $bob, 'team_member3_id' => ''];
+        $this->asAdmin()->post("admin/scores/{$scoreId}", $form)->assertRedirectTo('/admin/scores');
+        $this->seeInDatabase('scores', ['id' => $scoreId, 'team_member1_id' => $ann, 'team_member2_id' => $bob, 'team_member3_id' => null]);
+
+        $this->asAdmin()->post("admin/scores/{$scoreId}", ['team_member3_id' => (string) $bob] + $form)
+            ->assertSee('A player is chosen more than once as a team member.');
+        $this->seeInDatabase('scores', ['id' => $scoreId, 'team_member3_id' => null]);
+    }
+
     public function testDeleteAllPlayersKeepsAdminsAndPlayersWithScores(): void
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'League']);
