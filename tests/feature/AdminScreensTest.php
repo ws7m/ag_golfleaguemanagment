@@ -781,7 +781,7 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->assertNull($players->verifyLogin('golfej', 'golfer'));
     }
 
-    public function testCreateGroupsForPlayersMakesEmptyNumberedGroups(): void
+    public function testCreateGroupsForPlayersMakesNumberedGroupsAndFillsThem(): void
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'League']);
         $players  = new PlayerModel();
@@ -791,13 +791,58 @@ final class AdminScreensTest extends CIUnitTestCase
         $players->insert(['first_name' => 'Gone', 'last_name' => 'Away', 'league_id' => $leagueId, 'active' => 0]);
         db_connect()->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 1, 'active' => 1]);
 
-        // 9 players need 3 groups; 1 exists, so groups 2 and 3 are created, empty.
+        // 9 players need 3 groups; 1 exists, so groups 2 and 3 are created,
+        // and the 9 players fill them 4, 4, 1.
         $this->asAdmin()->post('admin/groups/generate', ['league_id' => $leagueId])
-            ->assertSessionHas('message', '9 registered players need 3 groups of 4. Created 2 (groups 2–3). Set their tee times and players on each group.');
-        $this->seeInDatabase('league_groups', ['league_id' => $leagueId, 'group_number' => 3, 'nine' => 'front', 'front_tee_time' => null, 'player1_id' => null]);
+            ->assertSessionHas('message', "9 registered players need 3 groups of 4. Created 2 (groups 2–3). Put 9 players into groups. Set each group's tee times on the group.");
+        $this->seeInDatabase('league_groups', ['league_id' => $leagueId, 'group_number' => 3, 'nine' => 'front', 'front_tee_time' => null]);
+        $filled = static fn (int $number) => count(\App\Models\LeagueGroupModel::playerIds(
+            db_connect()->table('league_groups')->where(['league_id' => $leagueId, 'group_number' => $number])->get()->getRowArray()
+        ));
+        $this->assertSame([4, 4, 1], [$filled(1), $filled(2), $filled(3)]);
 
         $this->asAdmin()->post('admin/groups/generate', ['league_id' => $leagueId])
-            ->assertSessionHas('message', '9 registered players need 3 groups of 4. The league already has 3 groups, so none were created.');
+            ->assertSessionHas('message', "9 registered players need 3 groups of 4. The league already has 3 groups, so none were created. Every player is already in a group. Set each group's tee times on the group.");
+    }
+
+    public function testCreateGroupsPutsDesiredGroupMembersTogether(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League']);
+        $db       = db_connect();
+        $ids      = [];
+        // 12 players, 3 groups. Kim already is in group 1 with 3 places free.
+        foreach ([
+            ['Ann', 'Ames', ''], ['Bob', 'Baker', ''], ['Cy', 'Cole', ''], ['Di', 'Dunn', ''],
+            ['Ed', 'Eads', 'gus  GRAY , Hal Hill'],        // Ed, Gus and Hal together (any capitals and spaces)
+            ['Fay', 'Ford', 'Ivy Ives'], ['Gus', 'Gray', ''], ['Hal', 'Hill', ''],
+            ['Ivy', 'Ives', 'Joe Jones, Nobody Here'],     // Fay, Ivy and Joe together; one name unknown
+            ['Joe', 'Jones', ''], ['Kim', 'King', ''],
+            ['Lee', 'Lowe', 'Kim King'],                   // Lee joins Kim's group
+        ] as [$first, $last, $desired]) {
+            $ids[$first] = (int) (new PlayerModel())->insert(['first_name' => $first, 'last_name' => $last, 'league_id' => $leagueId, 'desired_group_members' => $desired]);
+        }
+        $db->table('league_groups')->insert(['league_id' => $leagueId, 'group_number' => 1, 'player1_id' => $ids['Kim'], 'active' => 1]);
+
+        $this->asAdmin()->post('admin/groups/generate', ['league_id' => $leagueId])
+            ->assertSessionHas('message', '12 registered players need 3 groups of 4. Created 2 (groups 2–3). Put 11 players into groups, 7 of them with the group members they asked for.'
+                . " Desired group members not found: Nobody Here (named by Ivy Ives). Set each group's tee times on the group.");
+
+        $groupOf = [];
+        foreach ($db->table('league_groups')->where('league_id', $leagueId)->get()->getResultArray() as $group) {
+            foreach (\App\Models\LeagueGroupModel::playerIds($group) as $playerId) {
+                $groupOf[$playerId] = (int) $group['group_number'];
+            }
+        }
+        $this->assertCount(12, $groupOf);
+        $this->assertSame($groupOf[$ids['Kim']], $groupOf[$ids['Lee']]);
+        $this->assertSame($groupOf[$ids['Ed']], $groupOf[$ids['Gus']]);
+        $this->assertSame($groupOf[$ids['Ed']], $groupOf[$ids['Hal']]);
+        $this->assertSame($groupOf[$ids['Fay']], $groupOf[$ids['Ivy']]);
+        $this->assertSame($groupOf[$ids['Fay']], $groupOf[$ids['Joe']]);
+        $this->assertNotSame($groupOf[$ids['Ed']], $groupOf[$ids['Fay']]);
+        foreach (array_count_values($groupOf) as $count) {
+            $this->assertLessThanOrEqual(4, $count);
+        }
     }
 
     public function testGroupFormOffersOnlyUnassignedPlayers(): void

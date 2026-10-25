@@ -96,7 +96,7 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
   - Handicap - Whole integer number, entered by admin
   - Flight - 1, 2 or 3, set by admin
   - Desired tee time - Hour and minute
-  - Desired group members - CSV names
+  - Desired group members - first and last names separated by commas, e.g. "Jim Jones, Mary Smith"
   - IsAdmin
   - IsPlayer - Plays in the league. Admin-only accounts (IsPlayer = No) are hidden from player lists.
   - Winnings - Entered by admin; added to winnings from scored rounds
@@ -118,6 +118,7 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
   - Player5 Id - Normal member of the group
   - Player6 Id - Normal member of the group
   - Active
+- "Create groups for registered players" creates the groups needed (4 players each) and then puts every player not yet in a group into one. Players who listed desired group members go in the same group as them where there's room (a set of players who named each other is kept together; naming someone already in a group joins that group if it has room); everyone else fills the remaining places in last name order. Players already in a group aren't moved. Names that match no player are reported.
 - The groups list shows only the tee time for the nine each group is playing now, and clicking Front/Back switches it.
 - Tee time list: separate Front and Back lists (and PDFs) for a round chosen from a dropdown (default: the next round from today). The round's date is in each heading and the PDF file name. Players who said they are not playing in that round are left off and their place shows as Open.
   - Above the lists: a Notice box for a message, and an "Email tee sheets" button that emails the message and both PDFs to every active player registered in the league who has an email address (one email each). Players without an email address are listed so the admin can tell them another way.

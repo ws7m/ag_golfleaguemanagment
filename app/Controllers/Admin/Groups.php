@@ -2,6 +2,7 @@
 
 namespace App\Controllers\Admin;
 
+use App\Libraries\GroupAssigner;
 use App\Libraries\Lookup;
 use App\Libraries\Mailer;
 use App\Libraries\RoundEntries;
@@ -132,11 +133,13 @@ class Groups extends CrudController
     }
 
     /**
-     * Creates enough empty groups for the league's registered players at 4
+     * Creates enough groups for the league's registered players at 4
      * players to a group (8 players need 2 groups, 9 need 3). Groups the
      * league already has count towards that. New groups are numbered after
-     * the existing ones and start on the front nine, with no tee times or
-     * players.
+     * the existing ones and start on the front nine with no tee times.
+     * Then puts the players who aren't in a group yet into the groups,
+     * keeping players together as asked in their desired group members
+     * (see GroupAssigner).
      */
     public function generate()
     {
@@ -159,22 +162,36 @@ class Groups extends CrudController
         $needed   = (int) ceil($registered / self::PLAYERS_PER_GROUP);
         $summary  = "{$registered} registered players need {$needed} groups of " . self::PLAYERS_PER_GROUP . '.';
         if (count($existing) >= $needed) {
-            return $back->with('message', "{$summary} The league already has " . count($existing) . ' groups, so none were created.');
+            $summary .= ' The league already has ' . count($existing) . ' groups, so none were created.';
+        } else {
+            $number = (int) max([0, ...array_column($existing, 'group_number')]) + 1;
+            $first  = $number;
+            $db     = db_connect();
+            $db->transStart();
+            for ($i = count($existing); $i < $needed; $i++) {
+                $model->insert(['league_id' => $leagueId, 'group_number' => $number++, 'nine' => 'front', 'active' => 1]);
+            }
+            $db->transComplete();
+
+            $created  = $number - $first;
+            $summary .= " Created {$created} (" . ($created === 1 ? "group {$first}" : "groups {$first}–" . ($number - 1)) . ').';
         }
 
-        $number = (int) max([0, ...array_column($existing, 'group_number')]) + 1;
-        $first  = $number;
-        $db     = db_connect();
-        $db->transStart();
-        for ($i = count($existing); $i < $needed; $i++) {
-            $model->insert(['league_id' => $leagueId, 'group_number' => $number++, 'nine' => 'front', 'active' => 1]);
+        $result = GroupAssigner::assign($leagueId);
+        if ($result['placed'] === 0 && $result['unplaced'] === []) {
+            $summary .= ' Every player is already in a group.';
+        } else {
+            $summary .= " Put {$result['placed']} " . ($result['placed'] === 1 ? 'player' : 'players') . ' into groups';
+            $summary .= $result['together'] > 0 ? ", {$result['together']} of them with the group members they asked for." : '.';
         }
-        $db->transComplete();
+        if ($result['unplaced'] !== []) {
+            $summary .= ' No room for: ' . implode(', ', $result['unplaced']) . '.';
+        }
+        if ($result['unknown'] !== []) {
+            $summary .= ' Desired group members not found: ' . implode('; ', $result['unknown']) . '.';
+        }
 
-        $created = $number - $first;
-        $range   = $created === 1 ? "group {$first}" : "groups {$first}–" . ($number - 1);
-
-        return $back->with('message', "{$summary} Created {$created} ({$range}). Set their tee times and players on each group.");
+        return $back->with('message', $summary . ' Set each group\'s tee times on the group.');
     }
 
     /**
