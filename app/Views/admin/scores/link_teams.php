@@ -1,7 +1,7 @@
 <?php
 /**
- * "Link Teams" and "Map Team Scores" under the round choice on the scores
- * page, when the round's game is a team game.
+ * "Link Teams", "Teams = groups" and "Map Team Scores" under the round
+ * choice on the scores page, when the round's game is a team game.
  *
  * @var array $filterValues
  */
@@ -12,10 +12,16 @@ $game    = $roundId ? db_connect()->table('rounds r')->select('g.name, g.team_ga
 <?php if (! empty($game['team_game'])): ?>
     <div class="actions link-teams">
         <form method="post" action="<?= site_url('admin/scores/link-teams') ?>" class="row-form"
-              onsubmit="return confirm('Set every player\'s team number in this round from the team members they chose? Players with no team members are set to 0.')">
+              onsubmit="return confirm('Put players who aren\'t on a team yet on teams from the team members they chose?')">
             <?= csrf_field() ?>
             <input type="hidden" name="round_id" value="<?= $roundId ?>">
             <button type="submit">Link Teams</button>
+        </form>
+        <form method="post" action="<?= site_url('admin/scores/teams-from-groups') ?>" class="row-form"
+              onsubmit="return confirm('Put players who aren\'t on a team yet on a team with their group?')">
+            <?= csrf_field() ?>
+            <input type="hidden" name="round_id" value="<?= $roundId ?>">
+            <button type="submit">Teams = groups</button>
         </form>
         <form method="post" action="<?= site_url('admin/scores/map-team-scores') ?>" class="row-form"
               onsubmit="return confirm('Give every team member their team\'s lowest score on each hole?')">
@@ -23,7 +29,5 @@ $game    = $roundId ? db_connect()->table('rounds r')->select('g.name, g.team_ga
             <input type="hidden" name="round_id" value="<?= $roundId ?>">
             <button type="submit">Map Team Scores</button>
         </form>
-        <span class="muted"><?= esc($game['name']) ?> is a team game. Link Teams sets each player's Team number from the team
-            members players chose. Map Team Scores then gives everyone on a team the team's lowest score on each hole.</span>
     </div>
 <?php endif ?>

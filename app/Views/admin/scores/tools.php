@@ -6,22 +6,6 @@
         Players in a round with the same team number are a team; a blank team means an individual score. A blank hole means not entered yet.</span>
 </form>
 
-<?php if (! empty($filterValues['round_id'])): ?>
-    <section class="panel" id="teams-from-groups">
-        <h2>Teams = groups</h2>
-        <p class="muted">Puts every player in this round who isn't on a team yet on a team with their group, so teams start out
-            as the groups they tee off with. Each group's team number is its group number, unless that number is already used
-            by a team (for example from Link Teams); then it gets the next free number. Players already on a team, and players
-            who aren't in a group, are not changed. You can then change any player's team above.</p>
-        <form method="post" action="<?= site_url('admin/scores/teams-from-groups') ?>" class="form inline"
-              onsubmit="return confirm('Put every player who isn\'t on a team yet on a team with their group?')">
-            <?= csrf_field() ?>
-            <input type="hidden" name="round_id" value="<?= esc((string) $filterValues['round_id'], 'attr') ?>">
-            <button type="submit">Teams = groups</button>
-        </form>
-    </section>
-<?php endif ?>
-
 <?php
 $leagues = \App\Libraries\Lookup::leagues();
 $current = \App\Libraries\Lookup::currentLeagueId();

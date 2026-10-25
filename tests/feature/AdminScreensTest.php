@@ -1099,14 +1099,17 @@ final class AdminScreensTest extends CIUnitTestCase
         $roundId = (new RoundModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-06-07', 'game_id' => $gameId, 'status' => 'active']);
 
         // Not a team game: no button.
-        $this->assertStringNotContainsString('>Link Teams</button>', $this->asAdmin()->get("admin/scores?round_id={$roundId}")->response()->getBody());
+        $html = $this->asAdmin()->get("admin/scores?round_id={$roundId}")->response()->getBody();
+        $this->assertStringNotContainsString('>Link Teams</button>', $html);
+        $this->assertStringNotContainsString('>Teams = groups</button>', $html);
+        $this->assertStringNotContainsString('>Map Team Scores</button>', $html);
         $db->table('games')->where('id', $gameId)->update(['team_game' => 1]);
         $ids = [];
-        foreach (['Ames', 'Baker', 'Cole', 'Dunn', 'Eads', 'Ford', 'Gray'] as $last) {
+        foreach (['Ames', 'Baker', 'Cole', 'Dunn', 'Eads', 'Ford', 'Gray', 'Kim', 'Lee', 'Mae'] as $last) {
             $ids[$last] = (int) (new PlayerModel())->insert(['first_name' => 'Pat', 'last_name' => $last, 'league_id' => $leagueId]);
         }
         $outside = (int) (new PlayerModel())->insert(['first_name' => 'Hal', 'last_name' => 'Hill', 'league_id' => $leagueId]);
-        $score = static fn (string $last, array $members = [], int $team = 9) => [
+        $score = static fn (string $last, array $members = [], int $team = 0) => [
             'league_id' => $leagueId, 'round_id' => $roundId, 'player_id' => $ids[$last], 'team_number' => $team,
             'team_member1_id' => $members[0] ?? null, 'team_member2_id' => $members[1] ?? null,
             'team_member3_id' => $members[2] ?? null, 'team_member4_id' => $members[3] ?? null,
@@ -1123,16 +1126,34 @@ final class AdminScreensTest extends CIUnitTestCase
             // Ford named only Hill, who isn't in this round; Gray named nobody.
             $score('Ford', [$outside]),
             $score('Gray'),
+            // Kim was already put on team 1 by hand, and Lee on team 3. Gray
+            // isn't linked to Kim even though Lee named Kim.
+            $score('Kim', [], 1),
+            $score('Lee', [$ids['Kim']], 3),
+            // Mae named Kim, who is already on a team.
+            $score('Mae', [$ids['Kim']]),
         ]);
         $html = $this->asAdmin()->get("admin/scores?round_id={$roundId}")->response()->getBody();
         $this->assertStringContainsString('Link Teams', $html);
         $this->assertLessThan(strpos($html, '<table'), strpos($html, 'Link Teams'));
 
         $this->asAdmin()->post('admin/scores/link-teams', ['round_id' => $roundId])
-            ->assertSessionHas('message', 'Linked 2 teams (5 players) from the team members players chose. 2 players have no team members and were set to individual (team 0).'
-                . ' Not linked, because they have no score in this round: Ford, Pat named Hill, Hal.');
+            ->assertSessionHas('message', 'Linked 2 new teams (5 players) from the team members players chose. 2 players were already on a team and kept it.'
+                . ' Not linked, because they are already on a team: Mae, Pat named Kim, Pat.'
+                . ' Not linked, because they have no score in this round: Ford, Pat named Hill, Hal.'
+                . ' Check teams: Team 1 has 1 player; Team 3 has 1 player.');
         $team = static fn (string $last) => (int) $db->table('scores')->where('player_id', $ids[$last])->get()->getRow()->team_number;
-        $this->assertSame([1, 1, 1, 2, 2, 0, 0], array_map($team, ['Ames', 'Baker', 'Cole', 'Dunn', 'Eads', 'Ford', 'Gray']));
+        // New teams skip the numbers 1 and 3 already in use.
+        $this->assertSame([2, 2, 2, 4, 4, 0, 0, 1, 3, 0], array_map($team, ['Ames', 'Baker', 'Cole', 'Dunn', 'Eads', 'Ford', 'Gray', 'Kim', 'Lee', 'Mae']));
+
+        // Running it again changes nothing: everyone linked is now on a team.
+        $this->asAdmin()->post('admin/scores/link-teams', ['round_id' => $roundId]);
+        $this->assertSame([2, 2, 2, 4, 4, 0, 0, 1, 3, 0], array_map($team, ['Ames', 'Baker', 'Cole', 'Dunn', 'Eads', 'Ford', 'Gray', 'Kim', 'Lee', 'Mae']));
+
+        // Teams = groups sits right after Link Teams.
+        $html = $this->asAdmin()->get("admin/scores?round_id={$roundId}")->response()->getBody();
+        $this->assertLessThan(strpos($html, '>Teams = groups</button>'), strpos($html, '>Link Teams</button>'));
+        $this->assertLessThan(strpos($html, '>Map Team Scores</button>'), strpos($html, '>Teams = groups</button>'));
 
         $this->asAdmin()->post('admin/scores/link-teams', ['round_id' => 999])->assertSessionHas('error', 'Choose a round first.');
     }
