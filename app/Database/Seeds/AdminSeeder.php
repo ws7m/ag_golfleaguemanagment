@@ -62,7 +62,8 @@ class AdminSeeder extends Seeder
             $action = 'Updated';
         }
 
-        $players->setPassword((int) $id, $password);
+        // The installer chose this password, so it doesn't need changing.
+        $players->setPassword((int) $id, $password, false);
 
         $settings = new SettingModel();
         if ($settings->countAllResults() === 0) {

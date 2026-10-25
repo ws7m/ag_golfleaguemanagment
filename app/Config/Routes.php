@@ -10,6 +10,8 @@ $routes->get('login', 'Auth::loginForm');
 $routes->post('login', 'Auth::login');
 $routes->get('admin/login', 'Auth::loginForm');
 $routes->get('logout', 'Auth::logout');
+$routes->get('password', 'Auth::passwordForm');
+$routes->post('password', 'Auth::changePassword');
 
 $routes->group('player', ['filter' => 'playerauth', 'namespace' => 'App\Controllers\Player'], static function ($routes) {
     $routes->get('/', 'Home::index');

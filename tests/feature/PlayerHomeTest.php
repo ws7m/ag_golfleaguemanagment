@@ -33,7 +33,7 @@ final class PlayerHomeTest extends CIUnitTestCase
         $db             = db_connect();
         $db->table('leagues')->insert(['name' => 'Mongrels', 'active' => 1, 'start_date' => '2099-05-01']);
         $this->leagueId = (int) $db->insertID();
-        $this->playerId = (int) (new PlayerModel())->insert(['first_name' => 'Nora', 'last_name' => 'Vote', 'league_id' => $this->leagueId]);
+        $this->playerId = (int) (new PlayerModel())->insert(['first_name' => 'Nora', 'last_name' => 'Vote', 'league_id' => $this->leagueId, 'must_change_password' => 0]);
     }
 
     protected function tearDown(): void
@@ -93,7 +93,7 @@ final class PlayerHomeTest extends CIUnitTestCase
         $this->assertStringContainsString('Best Ball <span class="muted">(voted)</span>', $body);
 
         // Another player's vote for the same game adds to its count.
-        $other = (int) (new PlayerModel())->insert(['first_name' => 'Otto', 'last_name' => 'Vote', 'league_id' => $this->leagueId]);
+        $other = (int) (new PlayerModel())->insert(['first_name' => 'Otto', 'last_name' => 'Vote', 'league_id' => $this->leagueId, 'must_change_password' => 0]);
         $this->asPlayer($other)->post("player/rounds/{$scheduled}/vote", ['game_id' => $games['Best Ball']])->assertSessionHas('message');
         $this->seeInDatabase('game_votes', ['round_id' => $scheduled, 'game_id' => $games['Best Ball'], 'count' => 2]);
         $this->assertSame(1, $db->table('game_votes')->where('round_id', $scheduled)->countAllResults());

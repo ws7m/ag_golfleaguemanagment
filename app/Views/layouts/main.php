@@ -20,9 +20,9 @@
             <a href="<?= site_url('admin/scores') ?>">Scores</a>
             <a href="<?= site_url('admin/settings') ?>">Settings</a>
         </nav>
-        <span class="who"><?= esc(session('admin_name')) ?> · <a href="<?= site_url('logout') ?>">Log out</a></span>
+        <span class="who"><?= esc(session('admin_name')) ?> · <a href="<?= site_url('password') ?>">Password</a> · <a href="<?= site_url('logout') ?>">Log out</a></span>
     <?php elseif (session('player_id')): ?>
-        <span class="who"><?= esc(session('player_name')) ?> · <a href="<?= site_url('logout') ?>">Log out</a></span>
+        <span class="who"><?= esc(session('player_name')) ?> · <a href="<?= site_url('password') ?>">Password</a> · <a href="<?= site_url('logout') ?>">Log out</a></span>
     <?php endif ?>
 </header>
 

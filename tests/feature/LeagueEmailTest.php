@@ -44,7 +44,7 @@ final class LeagueEmailTest extends CIUnitTestCase
         $filters->globals['before'] = array_values(array_diff($filters->globals['before'], ['csrf']));
 
         $this->adminId = (int) (new PlayerModel())->insert([
-            'login' => 'admin1', 'first_name' => 'Pat', 'last_name' => 'Admin', 'is_admin' => 1, 'is_player' => 0,
+            'login' => 'admin1', 'first_name' => 'Pat', 'last_name' => 'Admin', 'is_admin' => 1, 'is_player' => 0, 'must_change_password' => 0,
         ]);
 
         $this->mail = new MockEmail(config(\Config\Email::class));

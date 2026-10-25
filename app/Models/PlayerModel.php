@@ -14,7 +14,7 @@ class PlayerModel extends Model
     protected $allowedFields = [
         'member_number', 'login', 'league_id', 'first_name', 'last_name', 'gender', 'email', 'phone',
         'text_msg_ok', 'tee', 'handicap', 'flight', 'desired_tee_time', 'desired_group_members',
-        'is_admin', 'is_player', 'password_hash', 'last_login_at', 'winnings_cents', 'active',
+        'is_admin', 'is_player', 'password_hash', 'must_change_password', 'last_login_at', 'winnings_cents', 'active',
     ];
 
     protected $validationRules = [
@@ -143,13 +143,36 @@ class PlayerModel extends Model
     }
 
     /**
-     * Sets a player's password, stored as a hash.
+     * Sets a player's password, stored as a hash. With $mustChange, the
+     * player has to choose a new password the next time they log in (for a
+     * password someone else set for them).
      */
-    public function setPassword(int $playerId, string $password): bool
+    public function setPassword(int $playerId, string $password, bool $mustChange = false): bool
     {
         return $this->builder()
             ->where('id', $playerId)
-            ->update(['password_hash' => password_hash($password, PASSWORD_DEFAULT)]);
+            ->update([
+                'password_hash'        => password_hash($password, PASSWORD_DEFAULT),
+                'must_change_password' => (int) $mustChange,
+            ]);
+    }
+
+    /**
+     * True if the player still has to choose their own password.
+     */
+    public function mustChangePassword(int $playerId): bool
+    {
+        return (bool) ($this->builder()->select('must_change_password')->where('id', $playerId)->get()->getRow()->must_change_password ?? false);
+    }
+
+    /**
+     * Checks a password against the one saved for a player.
+     */
+    public function passwordMatches(int $playerId, string $password): bool
+    {
+        $hash = $this->builder()->select('password_hash')->where('id', $playerId)->get()->getRow()->password_hash ?? '';
+
+        return $hash !== '' && password_verify($password, $hash);
     }
 
     private function loginTaken(string $login, ?int $exceptId): bool
@@ -172,10 +195,12 @@ class PlayerModel extends Model
             ? $this->generateLogin((string) ($row['first_name'] ?? ''), (string) ($row['last_name'] ?? ''))
             : strtolower(trim($row['login']));
 
-        // New players start with their last name as their password.
+        // New players start with their last name as their password, and
+        // choose their own the first time they log in.
         if (empty($row['password_hash'])) {
             $row['password_hash'] = password_hash(self::defaultPassword((string) ($row['last_name'] ?? '')), PASSWORD_DEFAULT);
         }
+        $row['must_change_password'] ??= 1;
 
         return $data;
     }

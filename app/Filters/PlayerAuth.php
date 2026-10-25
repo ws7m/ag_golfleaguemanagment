@@ -24,6 +24,11 @@ class PlayerAuth implements FilterInterface
 
             return redirect()->to('login');
         }
+
+        // They have to choose their own password before anything else.
+        if ($player['must_change_password']) {
+            return redirect()->to('password');
+        }
     }
 
     public function after(RequestInterface $request, ResponseInterface $response, $arguments = null)

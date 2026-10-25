@@ -53,11 +53,85 @@ class Auth extends BaseController
         }
         if ($player['is_admin']) {
             session()->set(['admin_id' => (int) $player['id'], 'admin_name' => $name]);
-
-            return redirect()->to('admin');
         }
 
-        return redirect()->to('player');
+        // First login (or a password an admin set): choose a new password.
+        if ($player['must_change_password']) {
+            return redirect()->to('password');
+        }
+
+        return redirect()->to($player['is_admin'] ? 'admin' : 'player');
+    }
+
+    // Shortest password accepted.
+    public const MIN_PASSWORD_LENGTH = 8;
+
+    /**
+     * The change password page, for anyone logged in. Players (and admins)
+     * are sent here after logging in for the first time, until they choose
+     * their own password.
+     */
+    public function passwordForm()
+    {
+        $id = $this->accountId();
+        if ($id === null) {
+            return redirect()->to('login');
+        }
+
+        return view('auth/password', [
+            'title'  => 'Change password',
+            'forced' => (new PlayerModel())->mustChangePassword($id),
+            'errors' => [],
+        ]);
+    }
+
+    public function changePassword()
+    {
+        $id = $this->accountId();
+        if ($id === null) {
+            return redirect()->to('login');
+        }
+        $players  = new PlayerModel();
+        $player   = $players->find($id);
+        $forced   = $players->mustChangePassword($id);
+        $current  = (string) $this->request->getPost('current_password');
+        $password = (string) $this->request->getPost('password');
+        $confirm  = (string) $this->request->getPost('password_confirm');
+
+        $errors = [];
+        // They just logged in with the starting password, so it isn't asked
+        // for again on the first change.
+        if (! $forced && ! $players->passwordMatches($id, $current)) {
+            $errors[] = 'Your current password is not correct.';
+        }
+        if (strlen($password) < self::MIN_PASSWORD_LENGTH) {
+            $errors[] = 'The new password must be at least ' . self::MIN_PASSWORD_LENGTH . ' characters.';
+        } elseif ($password !== $confirm) {
+            $errors[] = "The two new passwords don't match.";
+        } elseif ($players->passwordMatches($id, $password)) {
+            $errors[] = 'Choose a password different from the one you have now.';
+        } elseif (strtolower($password) === PlayerModel::defaultPassword((string) $player['last_name'])
+            || strtolower($password) === strtolower((string) $player['login'])) {
+            $errors[] = 'Choose a password that isn\'t your last name or login.';
+        }
+
+        if ($errors !== []) {
+            return view('auth/password', ['title' => 'Change password', 'forced' => $forced, 'errors' => $errors]);
+        }
+
+        $players->setPassword($id, $password);
+
+        return redirect()->to(session('admin_id') ? 'admin' : 'player')->with('message', 'Your new password is saved.');
+    }
+
+    /**
+     * The logged-in admin's or player's id, or null.
+     */
+    private function accountId(): ?int
+    {
+        $id = (int) (session('admin_id') ?: session('player_id'));
+
+        return $id > 0 ? $id : null;
     }
 
     public function logout()

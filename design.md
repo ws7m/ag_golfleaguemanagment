@@ -189,6 +189,7 @@ The detailed design kept below "Ignore all below here for the time being" (inclu
   - Admin contact email
 - **Login:** everyone, players and admins, logs in on one page with their own Login and Password. Logins work with any capitals. Admins go to the admin pages; players go to their player page. Failed attempts are limited per visitor IP.
 - The admin sets each player's password on the player edit screen (at least 8 characters, stored as a hash). A player without a password can't log in yet.
+- New players start with their last name as their password. The first time they log in they must choose their own (at least 8 characters, not their last name or login) before they can use any other page. A password an admin sets for someone else is temporary in the same way. Anyone logged in can change their password from the "Password" link at the top of the page (current password required).
 - **Initial admin:** an admin-only account with login `admin1`, created by the AdminSeeder. It is not a league player, so it does not appear in player lists; admin-only accounts are listed on the Settings page.
 
 ### 2.11 Deleting records

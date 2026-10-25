@@ -26,6 +26,11 @@ class AdminAuth implements FilterInterface
 
             return redirect()->to('login')->with('error', 'Please log in as an admin.');
         }
+
+        // They have to choose their own password before anything else.
+        if ($admin['must_change_password']) {
+            return redirect()->to('password');
+        }
     }
 
     public function after(RequestInterface $request, ResponseInterface $response, $arguments = null)

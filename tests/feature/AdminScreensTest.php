@@ -133,7 +133,7 @@ final class AdminScreensTest extends CIUnitTestCase
 
         // Players see it on their page after logging in, not on the login screen.
         $this->withSession([])->get('login')->assertDontSee('League Notice');
-        $playerId = (new PlayerModel())->insert(['first_name' => 'Nora', 'last_name' => 'Notice', 'league_id' => $id]);
+        $playerId = (new PlayerModel())->insert(['first_name' => 'Nora', 'last_name' => 'Notice', 'league_id' => $id, 'must_change_password' => 0]);
         $page     = $this->withSession(['player_id' => $playerId])->get('player');
         $page->assertOK();
         $body = $page->response()->getBody();
@@ -1214,12 +1214,69 @@ final class AdminScreensTest extends CIUnitTestCase
 
         $this->post('login', ['login' => 'holbrm', 'password' => 'wrong-password'])->assertSessionMissing('player_id');
 
+        // A password set by an admin is temporary, so the player chooses
+        // their own first.
         $result = $this->post('login', ['login' => 'holbrm', 'password' => 'fairway-27']);
-        $result->assertRedirectTo('/player');
+        $result->assertRedirectTo('/password');
         $result->assertSessionHas('player_id', (int) $player['id']);
         $result->assertSessionMissing('admin_id');
 
         $this->assertNotNull((new PlayerModel())->find($player['id'])['last_login_at'], 'Player login should record the login date.');
+    }
+
+    public function testFirstLoginMakesThePlayerChooseTheirOwnPassword(): void
+    {
+        $players  = new PlayerModel();
+        $playerId = (int) $players->insert(['first_name' => 'Mark', 'last_name' => 'Holbrook', 'is_player' => 1]);
+        $this->seeInDatabase('players', ['id' => $playerId, 'must_change_password' => 1]);
+
+        // Logging in with the starting password (last name) goes to the
+        // password page, and other player pages send them back there.
+        $this->post('login', ['login' => 'holbrm', 'password' => 'holbrook'])->assertRedirectTo('/password');
+        $asPlayer = fn () => $this->withSession(['player_id' => $playerId, 'player_name' => 'Mark Holbrook']);
+        $asPlayer()->get('player')->assertRedirectTo('/password');
+        $page = $asPlayer()->get('password');
+        $page->assertOK();
+        $page->assertSee('Choose your password');
+        $page->assertDontSee('Current password');
+
+        // Too short, not matching, or the last name are refused.
+        $asPlayer()->post('password', ['password' => 'short', 'password_confirm' => 'short'])->assertSee('at least 8 characters');
+        $asPlayer()->post('password', ['password' => 'fairway-27', 'password_confirm' => 'fairway-28'])->assertSee('passwords don');
+        $asPlayer()->post('password', ['password' => 'HOLBROOK', 'password_confirm' => 'HOLBROOK'])->assertSee('your last name or login');
+        $this->assertTrue($players->mustChangePassword($playerId));
+
+        $asPlayer()->post('password', ['password' => 'fairway-27', 'password_confirm' => 'fairway-27'])
+            ->assertRedirectTo('/player');
+        $this->assertFalse($players->mustChangePassword($playerId));
+        $this->assertNotNull($players->verifyLogin('holbrm', 'fairway-27'));
+        $asPlayer()->get('player')->assertOK();
+        $this->post('login', ['login' => 'holbrm', 'password' => 'fairway-27'])->assertRedirectTo('/player');
+
+        // Changing it later asks for the current password.
+        $page = $asPlayer()->get('password');
+        $page->assertSee('Current password');
+        $asPlayer()->post('password', ['current_password' => 'wrong', 'password' => 'bunker-99x', 'password_confirm' => 'bunker-99x'])
+            ->assertSee('current password is not correct');
+        $asPlayer()->post('password', ['current_password' => 'fairway-27', 'password' => 'bunker-99x', 'password_confirm' => 'bunker-99x'])
+            ->assertRedirectTo('/player');
+        $this->assertNotNull($players->verifyLogin('holbrm', 'bunker-99x'));
+
+        // Not logged in: the page sends you to log in.
+        $this->withSession([])->get('password')->assertRedirectTo('/login');
+    }
+
+    public function testNewAdminMustChooseTheirPasswordBeforeUsingAdminPages(): void
+    {
+        $players = new PlayerModel();
+        $adminId = (int) $players->insert(['first_name' => 'Al', 'last_name' => 'Boss', 'is_admin' => 1, 'is_player' => 0]);
+        $this->withSession(['admin_id' => $adminId])->get('admin/leagues')->assertRedirectTo('/password');
+
+        // An admin setting their own password on the edit page isn't asked to change it.
+        $this->asAdmin()->post("admin/players/{$this->adminId}", [
+            'first_name' => 'Pat', 'last_name' => 'Admin', 'login' => 'admin1', 'password' => 'new-admin-pass', 'active' => '1', 'is_admin' => '1',
+        ]);
+        $this->assertFalse($players->mustChangePassword($this->adminId));
     }
 
     public function testAdminCanSetLoginAndPasswordOnEdit(): void

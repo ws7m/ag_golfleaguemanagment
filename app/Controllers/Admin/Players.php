@@ -245,6 +245,8 @@ class Players extends CrudController
                 'handicap'      => 10,
                 'is_player'     => 1,
                 'active'        => 1,
+                // Test accounts keep their playerN password.
+                'must_change_password' => 0,
             ]);
         }
         $db->transComplete();
@@ -284,7 +286,9 @@ class Players extends CrudController
     protected function afterSave(int $id, array $data): void
     {
         if (! empty($data['password'])) {
-            (new PlayerModel())->setPassword($id, $data['password']);
+            // A password set for someone else is temporary: they choose
+            // their own at their next login. Your own is kept as it is.
+            (new PlayerModel())->setPassword($id, $data['password'], $id !== (int) session('admin_id'));
         }
     }
 }
