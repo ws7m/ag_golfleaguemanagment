@@ -1388,6 +1388,54 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->seeInDatabase('scores', ['id' => $ids['Ames'], 'team_member1_id' => null]);
     }
 
+    public function testFillInRandomScores(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League', 'active' => 1]);
+        $courseId = (new CourseModel())->insert(['name' => 'Course']);
+        for ($n = 1; $n <= 18; $n++) {
+            (new HoleModel())->insert(['course_id' => $courseId, 'number' => $n, 'nine' => $n <= 9 ? 'front' : 'back',
+                'white_par' => $n % 3 === 0 ? 3 : 4, 'red_par' => 5]);
+        }
+        $roundId = (new RoundModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-06-07', 'status' => 'active']);
+        $db      = db_connect();
+        $ids     = [];
+        foreach ([['Ames', 'white', 'front', 1, 0], ['Baker', 'red', 'back', 1, 0], ['Cole', null, null, 0, 0], ['Dunn', 'white', 'front', 1, 1]] as [$last, $tee, $nine, $playing, $locked]) {
+            $playerId = (new PlayerModel())->insert(['first_name' => 'Pat', 'last_name' => $last, 'league_id' => $leagueId, 'tee' => $tee]);
+            $db->table('scores')->insert(['league_id' => $leagueId, 'round_id' => $roundId, 'player_id' => $playerId, 'nine' => $nine,
+                'playing' => $playing, 'locked' => $locked, 'handicap_used' => 5, 'hole1' => $last === 'Ames' ? 7 : 0]);
+            $ids[$last] = (int) $db->insertID();
+        }
+
+        $this->assertStringContainsString('admin/scores/random-scores', $this->asAdmin()->get("admin/scores?round_id={$roundId}")->response()->getBody());
+
+        $this->asAdmin()->post('admin/scores/random-scores', ['round_id' => $roundId])
+            ->assertSessionHas('message', 'Random scores filled in for 2 players. Holes already entered, locked scores and players not playing were left alone.');
+        $row = static fn (string $last) => $db->table('scores')->where('id', $ids[$last])->get()->getRowArray();
+
+        // Ames (white, front): hole 1 kept; the rest par - 1 to par + 3; totalled.
+        $ames = $row('Ames');
+        $this->assertSame(7, (int) $ames['hole1']);
+        for ($h = 2; $h <= 9; $h++) {
+            $par = $h % 3 === 0 ? 3 : 4;
+            $this->assertGreaterThanOrEqual($par - 1, (int) $ames["hole{$h}"]);
+            $this->assertLessThanOrEqual($par + 3, (int) $ames["hole{$h}"]);
+        }
+        $this->assertSame((int) $ames['gross'] - 5, (int) $ames['net']);
+        $this->assertSame(0, (int) $ames['hole10'], 'Only the nine played is filled in.');
+
+        // Baker (red tees, back nine): par 5s.
+        $baker = $row('Baker');
+        for ($h = 10; $h <= 18; $h++) {
+            $this->assertGreaterThanOrEqual(4, (int) $baker["hole{$h}"]);
+            $this->assertLessThanOrEqual(8, (int) $baker["hole{$h}"]);
+        }
+        $this->assertNotNull($baker['gross']);
+
+        // Not playing, or locked: untouched.
+        $this->assertSame(0, (int) $row('Cole')['hole2']);
+        $this->assertSame(0, (int) $row('Dunn')['hole2']);
+    }
+
     public function testAdminScoreEditPageHasTeamMembers(): void
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'League', 'active' => 1]);

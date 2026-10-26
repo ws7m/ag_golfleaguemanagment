@@ -337,6 +337,75 @@ class Scores extends CrudController
     }
 
     /**
+     * TEMPORARY test data helper, to be removed later.
+     *
+     * Fills in random but reasonable hole scores for every playing score in
+     * a round that isn't locked: for each hole of the nine played (front if
+     * not set) that hasn't been entered yet, par for the player's tees
+     * (white if not set; 4 if the hole has no par) plus a random amount,
+     * mostly par or bogey, sometimes a birdie or a double, rarely worse.
+     * Holes already entered are kept. Gross and net are worked out again.
+     */
+    public function randomScores()
+    {
+        $roundId = (int) $this->request->getPost('round_id');
+        $back    = redirect()->to(site_url($this->baseRoute . "?round_id={$roundId}"));
+        $round   = $roundId > 0 ? (new RoundModel())->find($roundId) : null;
+        if ($round === null) {
+            return $back->with('error', 'Choose a round first.');
+        }
+
+        $db    = db_connect();
+        $holes = $db->table('holes')->where('course_id', $round['course_id'])->get()->getResultArray();
+        $pars  = [];
+        foreach ($holes as $hole) {
+            foreach (['blue', 'white', 'red'] as $tee) {
+                $pars[$tee][(int) $hole['number']] = (int) $hole["{$tee}_par"];
+            }
+        }
+        $scores = $db->table('scores s')
+            ->select('s.*, p.tee')
+            ->join('players p', 'p.id = s.player_id')
+            ->where(['s.round_id' => $roundId, 's.playing' => 1, 's.locked' => 0])
+            ->get()->getResultArray();
+
+        // Strokes over par and how likely each is (out of 100).
+        $overPar = [-1 => 8, 0 => 35, 1 => 37, 2 => 15, 3 => 5];
+        $filled  = 0;
+        $now     = date('Y-m-d H:i:s');
+        $db->transStart();
+        foreach ($scores as $score) {
+            $tee     = in_array($score['tee'], ['blue', 'white', 'red'], true) ? $score['tee'] : 'white';
+            $changes = ['nine' => $score['nine'] ?: 'front'];
+            foreach (ScoreModel::holesForNine($changes['nine']) as $hole) {
+                if ((int) $score["hole{$hole}"] > 0) {
+                    continue;
+                }
+                $roll = random_int(1, 100);
+                foreach ($overPar as $over => $chance) {
+                    if (($roll -= $chance) <= 0) {
+                        break;
+                    }
+                }
+                $par                     = ($pars[$tee][$hole] ?? 0) ?: 4;
+                $changes["hole{$hole}"] = max(1, $par + $over);
+            }
+            if (count($changes) === 1) {
+                continue;
+            }
+            $changes['gross']      = ScoreModel::grossForNine($changes + $score);
+            $changes['net']        = $changes['gross'] !== null && $score['handicap_used'] !== null ? $changes['gross'] - (int) $score['handicap_used'] : null;
+            $changes['updated_at'] = $now;
+            $db->table('scores')->where('id', (int) $score['id'])->update($changes);
+            $filled++;
+        }
+        $db->transComplete();
+
+        return $back->with('message', "Random scores filled in for {$filled} " . ($filled === 1 ? 'player' : 'players')
+            . '. Holes already entered, locked scores and players not playing were left alone.');
+    }
+
+    /**
      * For each team in a round (team number above 0), sets every member's
      * score on each hole to the lowest score any member entered for that
      * hole. Holes no one on the team has entered (blank or 0) are left

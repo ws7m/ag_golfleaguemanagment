@@ -6,6 +6,8 @@
         Players in a round with the same team number are a team; a blank team means an individual score. A blank hole means not entered yet.</span>
 </form>
 
+<?= view('admin/scores/random_scores', ['filterValues' => $filterValues]) ?>
+
 <?php
 $leagues = \App\Libraries\Lookup::leagues();
 $current = \App\Libraries\Lookup::currentLeagueId();
