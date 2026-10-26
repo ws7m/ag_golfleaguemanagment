@@ -58,7 +58,8 @@
                         <?php if ($name === $editLinkColumn): ?>
                             <td><a href="<?= site_url("{$baseRoute}/{$row['id']}/edit") ?>" title="Edit"><?= esc(field_display($fields[$name], $row[$name] ?? null)) ?: 'Edit' ?></a></td>
                         <?php elseif (isset($cellViews[$name])): ?>
-                            <td><?= view($cellViews[$name], ['row' => $row]) ?></td>
+                            <?php // Rendered once per row, so without the debug toolbar's per-view comments and saved data. ?>
+                            <td><?= view($cellViews[$name], ['row' => $row], ['debug' => false, 'saveData' => false]) ?></td>
                         <?php elseif (isset($selectColumns[$name])): ?>
                             <td>
                                 <form method="post" action="<?= site_url(str_replace('{id}', (string) $row['id'], $selectColumns[$name])) ?>" class="row-form">

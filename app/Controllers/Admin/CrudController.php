@@ -146,7 +146,8 @@ abstract class CrudController extends BaseController
     public function index(): string
     {
         $model  = $this->newModel();
-        $fields = $this->resolvedFields(true) + $this->listFields();
+        // Only the list's columns and filters need their options looked up.
+        $fields = $this->resolvedFields(true, [...$this->listColumns, ...$this->filters]) + $this->listFields();
         $active = [];
 
         if ($this->listWhere !== []) {
@@ -409,14 +410,23 @@ abstract class CrudController extends BaseController
 
     /**
      * Fields with select options loaded. For the list page, listOptions
-     * (shorter labels) are used where a field has them.
+     * (shorter labels) are used where a field has them. With $only, options
+     * are looked up just for those fields (a big list such as every player
+     * is slow to fetch and pass around when nothing shows it).
+     *
+     * @param list<string>|null $only
      */
-    protected function resolvedFields(bool $forList = false): array
+    protected function resolvedFields(bool $forList = false, ?array $only = null): array
     {
         $fields = $this->fields();
-        foreach ($fields as &$field) {
+        foreach ($fields as $name => &$field) {
             if ($forList && isset($field['listOptions'])) {
                 $field['options'] = $field['listOptions'];
+            }
+            if ($only !== null && ! in_array($name, $only, true) && isset($field['options']) && is_string($field['options'])) {
+                $field['options'] = [];
+
+                continue;
             }
             if (isset($field['options']) && is_string($field['options'])) {
                 $field['options'] = Lookup::{$field['options']}();

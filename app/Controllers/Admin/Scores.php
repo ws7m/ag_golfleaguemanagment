@@ -167,7 +167,11 @@ class Scores extends CrudController
      */
     public function saveScores()
     {
-        $posted = $this->request->getPost('scores') ?? [];
+        // Sent as one JSON value by the list page (see admin/scores/tools),
+        // or as separate scores[id][field] values without JavaScript.
+        $json   = (string) $this->request->getPost('scores_json');
+        $posted = $json !== '' ? json_decode($json, true) : $this->request->getPost('scores');
+        $posted = is_array($posted) ? $posted : [];
         $model  = new ScoreModel();
         $errors = [];
         $saved  = 0;

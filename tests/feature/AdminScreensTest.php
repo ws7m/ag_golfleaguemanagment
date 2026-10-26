@@ -1429,6 +1429,27 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->seeInDatabase('scores', ['id' => $annScore, 'handicap_used' => 12]);
     }
 
+    public function testSaveScoresForABigRoundSentAsOneValue(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League', 'active' => 1]);
+        $courseId = (new CourseModel())->insert(['name' => 'Course']);
+        $roundId  = (new RoundModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-06-07', 'status' => 'active']);
+        $db       = db_connect();
+        $scores   = [];
+        // 150 players x 11 boxes is more than PHP's default 1000 form values.
+        for ($i = 1; $i <= 150; $i++) {
+            $playerId = (new PlayerModel())->insert(['first_name' => "P{$i}", 'last_name' => 'Golfer', 'league_id' => $leagueId]);
+            $db->table('scores')->insert(['league_id' => $leagueId, 'round_id' => $roundId, 'player_id' => $playerId, 'nine' => 'front']);
+            $scores[(int) $db->insertID()] = ['team_number' => '', 'handicap_used' => '10'] + array_fill_keys(array_map(static fn ($h) => "hole{$h}", range(1, 9)), '4');
+        }
+
+        $this->assertStringContainsString('name="scores_json"', $this->asAdmin()->get("admin/scores?round_id={$roundId}")->response()->getBody());
+
+        $this->asAdmin()->post('admin/scores/save', ['scores_json' => json_encode($scores), 'return_round_id' => $roundId])
+            ->assertSessionHas('message', '150 scores saved.');
+        $this->assertSame(150, $db->table('scores')->where(['round_id' => $roundId, 'gross' => 36, 'net' => 26, 'handicap_used' => 10])->countAllResults());
+    }
+
     public function testFillInRandomScores(): void
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'League', 'active' => 1]);
