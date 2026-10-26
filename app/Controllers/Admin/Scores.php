@@ -12,14 +12,20 @@ class Scores extends CrudController
     protected string $title      = 'Scores';
     protected string $singular   = 'Score';
     protected string $baseRoute  = 'admin/scores';
-    protected array $listColumns = ['player_id', 'nine', 'playing', 'paid', 'team_number', 'holes', 'gross', 'net', 'place', 'winnings_cents'];
+    protected array $listColumns = ['player_id', 'nine', 'playing', 'paid', 'team_number', 'holes', 'gross', 'handicap_used', 'net', 'place', 'winnings_cents'];
     // Clicking Yes/No for Playing or Paid on the list switches it.
     protected array $toggleColumns = [
         'playing' => 'admin/scores/{id}/toggle/playing',
         'paid'    => 'admin/scores/{id}/toggle/paid',
     ];
     // Small boxes for the nine holes played, saved with "Save hole scores".
-    protected array $cellViews = ['team_number' => 'admin/scores/team_cell', 'holes' => 'admin/scores/hole_cells'];
+    protected array $cellViews = [
+        'team_number'   => 'admin/scores/team_cell',
+        'holes'         => 'admin/scores/hole_cells',
+        // A Handicap box; changing it updates Net on the row straight away.
+        'handicap_used' => 'admin/scores/handicap_cell',
+        'net'           => 'admin/scores/net_cell',
+    ];
 
     // Teams of more players than this get a warning when saved.
     public const MAX_TEAM_SIZE = ScoreModel::TEAM_MEMBER_SLOTS;
@@ -63,7 +69,7 @@ class Scores extends CrudController
 
         return $fields + [
             'gross'          => ['label' => 'Gross', 'type' => 'number', 'compact' => 'results', 'help' => 'Leave blank to total the nine played automatically.'],
-            'handicap_used'  => ['label' => 'Handicap used', 'type' => 'number', 'compact' => 'results'],
+            'handicap_used'  => ['label' => 'Handicap used', 'listLabel' => 'Hcp', 'type' => 'number', 'compact' => 'results'],
             'net'            => ['label' => 'Net', 'type' => 'number', 'compact' => 'results'],
             'place'          => ['label' => 'Place', 'type' => 'number', 'compact' => 'results'],
             'winnings_cents' => ['label' => 'Winnings', 'listLabel' => 'Won', 'type' => 'money', 'compact' => 'results'],
@@ -119,6 +125,25 @@ class Scores extends CrudController
     }
 
     /**
+     * Adds each player's handicap, to fill the Handicap box of scores that
+     * don't have one saved yet.
+     */
+    protected function listRows(array $rows, array $filterValues): array
+    {
+        $ids      = array_unique(array_map('intval', array_column($rows, 'player_id')));
+        $handicap = $ids === [] ? [] : array_column(
+            db_connect()->table('players')->select('id, handicap')->whereIn('id', $ids)->get()->getResultArray(),
+            'handicap',
+            'id'
+        );
+        foreach ($rows as &$row) {
+            $row['player_handicap'] = $handicap[$row['player_id']] ?? null;
+        }
+
+        return $rows;
+    }
+
+    /**
      * Switches a score's Playing or Paid between yes and no.
      */
     public function toggle(int $id, string $field)
@@ -163,6 +188,16 @@ class Scores extends CrudController
                     continue;
                 }
             }
+            // The handicap typed in the list (blank = none), used for net.
+            if (array_key_exists('handicap_used', $holes)) {
+                $handicap = trim((string) $holes['handicap_used']);
+                if ($handicap !== '' && ! preg_match('/^-?\d{1,2}$/', $handicap)) {
+                    $errors[] = "Handicap must be a whole number, e.g. 12, or -2 for a plus handicap (score {$id}).";
+
+                    continue;
+                }
+                $score['handicap_used'] = $handicap === '' ? null : (int) $handicap;
+            }
             [$changes, $error] = ScoreModel::holeChanges($score, $holes);
             if ($error !== null) {
                 $errors[] = rtrim($error, '.') . " (score {$id}).";
@@ -171,6 +206,9 @@ class Scores extends CrudController
             }
             if ($team !== null) {
                 $changes['team_number'] = (int) $team;
+            }
+            if (array_key_exists('handicap_used', $holes)) {
+                $changes['handicap_used'] = $score['handicap_used'];
             }
             $changes['updated_at'] = date('Y-m-d H:i:s');
             $db->table('scores')->where('id', (int) $id)->update($changes);

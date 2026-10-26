@@ -2,8 +2,9 @@
     <?= csrf_field() ?>
     <input type="hidden" name="return_round_id" value="<?= esc((string) ($filterValues['round_id'] ?? ''), 'attr') ?>">
     <button type="submit">Save scores</button>
-    <span class="muted">Type team numbers and each player's strokes in the boxes above (the grey number is the hole), then save.
-        Players in a round with the same team number are a team; a blank team means an individual score. A blank hole means not entered yet.</span>
+    <span class="muted">Type team numbers, each player's strokes (the grey number is the hole) and handicaps in the boxes above, then save.
+        Players in a round with the same team number are a team; a blank team means an individual score. A blank hole means not entered yet.
+        The Hcp box starts with the player's handicap; Net is gross minus Hcp.</span>
 </form>
 
 <?= view('admin/scores/random_scores', ['filterValues' => $filterValues]) ?>

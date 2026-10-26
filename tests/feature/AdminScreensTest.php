@@ -1388,6 +1388,44 @@ final class AdminScreensTest extends CIUnitTestCase
         $this->seeInDatabase('scores', ['id' => $ids['Ames'], 'team_member1_id' => null]);
     }
 
+    public function testHandicapBoxOnTheScoresList(): void
+    {
+        $leagueId = (new LeagueModel())->insert(['name' => 'League', 'active' => 1]);
+        $courseId = (new CourseModel())->insert(['name' => 'Course']);
+        $roundId  = (new RoundModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-06-07', 'status' => 'active']);
+        $db       = db_connect();
+        $ann      = (new PlayerModel())->insert(['first_name' => 'Ann', 'last_name' => 'Ames', 'league_id' => $leagueId, 'handicap' => 12]);
+        $bob      = (new PlayerModel())->insert(['first_name' => 'Bob', 'last_name' => 'Baker', 'league_id' => $leagueId, 'handicap' => 7]);
+        $holes    = array_combine(array_map(static fn ($h) => "hole{$h}", range(1, 9)), array_fill(0, 9, 5));
+        // Ann has no handicap saved on her score yet; Bob's score has 9.
+        $db->table('scores')->insert(['league_id' => $leagueId, 'round_id' => $roundId, 'player_id' => $ann, 'nine' => 'front', 'gross' => 45] + $holes);
+        $annScore = (int) $db->insertID();
+        $db->table('scores')->insert(['league_id' => $leagueId, 'round_id' => $roundId, 'player_id' => $bob, 'nine' => 'front', 'handicap_used' => 9, 'gross' => 45, 'net' => 36] + $holes);
+        $bobScore = (int) $db->insertID();
+
+        // The Hcp column sits between Gross and Net; Ann's box starts with her handicap, Bob's with his score's.
+        $html = $this->asAdmin()->get("admin/scores?round_id={$roundId}")->response()->getBody();
+        $this->assertMatchesRegularExpression('#<th>Gross</th>\s*<th>Hcp</th>\s*<th>Net</th>#', $html);
+        $this->assertMatchesRegularExpression('#name="scores\[' . $annScore . '\]\[handicap_used\]"\s+value="12"#', $html);
+        $this->assertMatchesRegularExpression('#name="scores\[' . $bobScore . '\]\[handicap_used\]"\s+value="9"#', $html);
+        $this->assertStringContainsString('<span id="net-' . $bobScore . '">36</span>', $html);
+
+        // Saving stores the handicap and works out net from it.
+        $this->asAdmin()->post('admin/scores/save', ['scores' => [
+            $annScore => ['handicap_used' => '12'] + array_map('strval', $holes),
+            $bobScore => ['handicap_used' => '-2'] + array_map('strval', $holes),
+        ], 'return_round_id' => $roundId])->assertSessionHas('message', '2 scores saved.');
+        $this->seeInDatabase('scores', ['id' => $annScore, 'handicap_used' => 12, 'gross' => 45, 'net' => 33]);
+        $this->seeInDatabase('scores', ['id' => $bobScore, 'handicap_used' => -2, 'net' => 47]);
+
+        // Blank means no handicap, so no net; a bad value is refused.
+        $this->asAdmin()->post('admin/scores/save', ['scores' => [$bobScore => ['handicap_used' => ''] + array_map('strval', $holes)], 'return_round_id' => $roundId]);
+        $this->seeInDatabase('scores', ['id' => $bobScore, 'handicap_used' => null, 'net' => null]);
+        $this->asAdmin()->post('admin/scores/save', ['scores' => [$annScore => ['handicap_used' => 'ten'] + array_map('strval', $holes)], 'return_round_id' => $roundId])
+            ->assertSessionHas('error');
+        $this->seeInDatabase('scores', ['id' => $annScore, 'handicap_used' => 12]);
+    }
+
     public function testFillInRandomScores(): void
     {
         $leagueId = (new LeagueModel())->insert(['name' => 'League', 'active' => 1]);
