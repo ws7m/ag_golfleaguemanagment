@@ -1394,7 +1394,7 @@ final class AdminScreensTest extends CIUnitTestCase
         $courseId = (new CourseModel())->insert(['name' => 'Course']);
         $roundId  = (new RoundModel())->insert(['league_id' => $leagueId, 'course_id' => $courseId, 'round_date' => '2027-06-07', 'status' => 'active']);
         $db       = db_connect();
-        $ann      = (new PlayerModel())->insert(['first_name' => 'Ann', 'last_name' => 'Ames', 'league_id' => $leagueId, 'handicap' => 12]);
+        $ann      = (new PlayerModel())->insert(['first_name' => 'Ann', 'last_name' => 'Ames', 'league_id' => $leagueId, 'handicap' => 12, 'flight' => 3]);
         $bob      = (new PlayerModel())->insert(['first_name' => 'Bob', 'last_name' => 'Baker', 'league_id' => $leagueId, 'handicap' => 7]);
         $holes    = array_combine(array_map(static fn ($h) => "hole{$h}", range(1, 9)), array_fill(0, 9, 5));
         // Ann has no handicap saved on her score yet; Bob's score has 9.
@@ -1406,9 +1406,12 @@ final class AdminScreensTest extends CIUnitTestCase
         // The Hcp column sits between Gross and Net; Ann's box starts with her handicap, Bob's with his score's.
         $html = $this->asAdmin()->get("admin/scores?round_id={$roundId}")->response()->getBody();
         $this->assertMatchesRegularExpression('#<th>Gross</th>\s*<th>Hcp</th>\s*<th>Net</th>#', $html);
+        // Each player's flight shows (not as a box) just before Team.
+        $this->assertMatchesRegularExpression('#<th>Flt</th>\s*<th>Team</th>#', $html);
         $this->assertMatchesRegularExpression('#name="scores\[' . $annScore . '\]\[handicap_used\]"\s+value="12"#', $html);
         $this->assertMatchesRegularExpression('#name="scores\[' . $bobScore . '\]\[handicap_used\]"\s+value="9"#', $html);
         $this->assertStringContainsString('<span id="net-' . $bobScore . '">36</span>', $html);
+        $this->assertMatchesRegularExpression('#<td>3</td>\s*<td>\s*(?:<!--[^>]*-->\s*)*<input[^>]*name="scores\[' . $annScore . '\]\[team_number\]"#', $html);
 
         // Saving stores the handicap and works out net from it.
         $this->asAdmin()->post('admin/scores/save', ['scores' => [

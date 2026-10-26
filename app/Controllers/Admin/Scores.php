@@ -12,7 +12,7 @@ class Scores extends CrudController
     protected string $title      = 'Scores';
     protected string $singular   = 'Score';
     protected string $baseRoute  = 'admin/scores';
-    protected array $listColumns = ['player_id', 'nine', 'playing', 'paid', 'team_number', 'holes', 'gross', 'handicap_used', 'net', 'place', 'winnings_cents'];
+    protected array $listColumns = ['player_id', 'nine', 'playing', 'paid', 'flight', 'team_number', 'holes', 'gross', 'handicap_used', 'net', 'place', 'winnings_cents'];
     // Clicking Yes/No for Playing or Paid on the list switches it.
     protected array $toggleColumns = [
         'playing' => 'admin/scores/{id}/toggle/playing',
@@ -121,23 +121,24 @@ class Scores extends CrudController
 
     protected function listFields(): array
     {
-        return ['holes' => ['label' => 'Holes']];
+        return ['flight' => ['label' => 'Flight', 'listLabel' => 'Flt'], 'holes' => ['label' => 'Holes']];
     }
 
     /**
-     * Adds each player's handicap, to fill the Handicap box of scores that
-     * don't have one saved yet.
+     * Adds each player's flight (shown only) and handicap (to fill the
+     * Handicap box of scores that don't have one saved yet).
      */
     protected function listRows(array $rows, array $filterValues): array
     {
-        $ids      = array_unique(array_map('intval', array_column($rows, 'player_id')));
-        $handicap = $ids === [] ? [] : array_column(
-            db_connect()->table('players')->select('id, handicap')->whereIn('id', $ids)->get()->getResultArray(),
-            'handicap',
+        $ids     = array_unique(array_map('intval', array_column($rows, 'player_id')));
+        $players = $ids === [] ? [] : array_column(
+            db_connect()->table('players')->select('id, handicap, flight')->whereIn('id', $ids)->get()->getResultArray(),
+            null,
             'id'
         );
         foreach ($rows as &$row) {
-            $row['player_handicap'] = $handicap[$row['player_id']] ?? null;
+            $row['player_handicap'] = $players[$row['player_id']]['handicap'] ?? null;
+            $row['flight']          = $players[$row['player_id']]['flight'] ?? null;
         }
 
         return $rows;
